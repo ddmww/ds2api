@@ -1,0 +1,83 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestLoadDotEnvLoadsWorkingDirectoryFileWithoutOverridingExistingEnv(t *testing.T) {
+	dir := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(oldWD)
+	})
+
+	const newKey = "DS2API_TEST_DOTENV_NEW"
+	const keepKey = "DS2API_TEST_DOTENV_KEEP"
+	const quotedKey = "DS2API_TEST_DOTENV_QUOTED"
+
+	unsetEnv(t, newKey)
+	unsetEnv(t, quotedKey)
+	t.Setenv(keepKey, "from-env")
+
+	content := "DS2API_TEST_DOTENV_NEW=from-file\n" +
+		"DS2API_TEST_DOTENV_KEEP=from-file\n" +
+		"DS2API_TEST_DOTENV_QUOTED=\"line1\\nline2\"\n"
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(content), 0o644); err != nil {
+		t.Fatalf("write .env: %v", err)
+	}
+
+	if err := LoadDotEnv(); err != nil {
+		t.Fatalf("LoadDotEnv() error: %v", err)
+	}
+
+	if got := os.Getenv(newKey); got != "from-file" {
+		t.Fatalf("expected %s from .env, got %q", newKey, got)
+	}
+	if got := os.Getenv(keepKey); got != "from-env" {
+		t.Fatalf("expected existing env to win, got %q", got)
+	}
+	if got := os.Getenv(quotedKey); got != "line1\nline2" {
+		t.Fatalf("expected quoted newline decoding, got %q", got)
+	}
+}
+
+func TestLoadDotEnvIgnoresMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(oldWD)
+	})
+
+	if err := LoadDotEnv(); err != nil {
+		t.Fatalf("expected missing .env to be ignored, got %v", err)
+	}
+}
+
+func unsetEnv(t *testing.T, key string) {
+	t.Helper()
+	old, had := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatalf("unset %s: %v", key, err)
+	}
+	t.Cleanup(func() {
+		if had {
+			_ = os.Setenv(key, old)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
+}

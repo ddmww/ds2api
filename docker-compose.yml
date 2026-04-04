@@ -3,8 +3,10 @@ services:
     image: ghcr.io/cjackhwang/ds2api:latest
     container_name: ds2api
     restart: always
+    env_file:
+      - .env
     ports:
-      - "6011:5001"
+      - "${DS2API_HOST_PORT:-6011}:${PORT:-5001}"
     volumes:
       - ./config.json:/app/config.json    # 配置文件
       - ./.env:/app/.env                  # 环境变量
