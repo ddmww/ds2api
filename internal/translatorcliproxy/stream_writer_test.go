@@ -63,3 +63,15 @@ func TestOpenAIStreamTranslatorWriterPreservesKeepAliveComment(t *testing.T) {
 		t.Fatalf("expected keep-alive comment passthrough, got %q", body)
 	}
 }
+
+func TestInjectStreamUsageMetadataPreservesSSEFrameTerminator(t *testing.T) {
+	chunk := []byte("data: {\"candidates\":[{\"index\":0}],\"model\":\"gemini-2.5-pro\"}\n\n")
+	usage := openAIUsage{PromptTokens: 11, CompletionTokens: 29, TotalTokens: 40}
+	got := injectStreamUsageMetadata(chunk, sdktranslator.FormatGemini, usage)
+	if !strings.HasSuffix(string(got), "\n\n") {
+		t.Fatalf("expected injected chunk to preserve \\n\\n frame terminator, got %q", string(got))
+	}
+	if !strings.Contains(string(got), `"usageMetadata"`) {
+		t.Fatalf("expected usageMetadata injected, got %q", string(got))
+	}
+}

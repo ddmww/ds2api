@@ -162,6 +162,13 @@ func injectStreamUsageMetadata(chunk []byte, target sdktranslator.Format, usage 
 	if target != sdktranslator.FormatGemini {
 		return chunk
 	}
+	suffix := ""
+	switch {
+	case bytes.HasSuffix(chunk, []byte("\n\n")):
+		suffix = "\n\n"
+	case bytes.HasSuffix(chunk, []byte("\n")):
+		suffix = "\n"
+	}
 	text := strings.TrimSpace(string(chunk))
 	if text == "" {
 		return chunk
@@ -194,7 +201,10 @@ func injectStreamUsageMetadata(chunk []byte, target sdktranslator.Format, usage 
 		return chunk
 	}
 	if hasDataPrefix {
-		return []byte("data: " + string(b))
+		return []byte("data: " + string(b) + suffix)
+	}
+	if suffix != "" {
+		return append(b, []byte(suffix)...)
 	}
 	return b
 }
