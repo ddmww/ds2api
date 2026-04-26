@@ -3,7 +3,6 @@ package openai
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ds2api/internal/auth"
-	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/promptcompat"
 )
 
@@ -60,27 +58,21 @@ func (streamStatusManagedAuthStub) DetermineCaller(_ *http.Request) (*auth.Reque
 
 func (streamStatusManagedAuthStub) Release(_ *auth.RequestAuth) {}
 
-func TestBuildOpenAIHistoryTranscriptUsesInjectedFileWrapper(t *testing.T) {
+func TestBuildOpenAIHistoryTranscriptUsesInlineContext(t *testing.T) {
 	_, historyMessages := splitOpenAIHistoryMessages(historySplitTestMessages(), 1)
 	transcript := buildOpenAIHistoryTranscript(historyMessages)
 
-	if !strings.HasPrefix(transcript, "[file content end]\n\n") {
-		t.Fatalf("expected injected file wrapper prefix, got %q", transcript)
+	if !strings.HasPrefix(transcript, "Previous conversation history:\n\n") {
+		t.Fatalf("expected inline history prefix, got %q", transcript)
 	}
-	if !strings.Contains(transcript, "<｜begin▁of▁sentence｜>") {
-		t.Fatalf("expected serialized conversation markers, got %q", transcript)
+	if strings.Contains(transcript, "[file content end]") || strings.Contains(transcript, "[file name]: IGNORE") {
+		t.Fatalf("expected no injected file wrapper, got %q", transcript)
 	}
 	if !strings.Contains(transcript, "first user turn") || !strings.Contains(transcript, "tool result") {
 		t.Fatalf("expected historical turns preserved, got %q", transcript)
 	}
-	if !strings.Contains(transcript, "[reasoning_content]") || !strings.Contains(transcript, "hidden reasoning") {
-		t.Fatalf("expected reasoning block preserved, got %q", transcript)
-	}
 	if !strings.Contains(transcript, "<tool_calls>") {
 		t.Fatalf("expected tool calls preserved, got %q", transcript)
-	}
-	if !strings.HasSuffix(transcript, "\n[file name]: IGNORE\n[file content begin]\n") {
-		t.Fatalf("expected injected file wrapper suffix, got %q", transcript)
 	}
 }
 
@@ -172,15 +164,20 @@ func TestApplyHistorySplitCarriesHistoryText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apply history split failed: %v", err)
 	}
-	if len(ds.uploadCalls) != 1 {
-		t.Fatalf("expected 1 upload call, got %d", len(ds.uploadCalls))
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no upload call, got %d", len(ds.uploadCalls))
 	}
-	if out.HistoryText != string(ds.uploadCalls[0].Data) {
+	if !strings.Contains(out.HistoryText, "first user turn") || !strings.Contains(out.HistoryText, "tool result") {
 		t.Fatalf("expected history text to be preserved on normalized request")
 	}
+	if !strings.Contains(out.FinalPrompt, "Previous conversation history") ||
+		!strings.Contains(out.FinalPrompt, "first user turn") ||
+		!strings.Contains(out.FinalPrompt, "latest user turn") {
+		t.Fatalf("expected inline history and latest turn in final prompt, got %s", out.FinalPrompt)
+	}
 }
 
-func TestChatCompletionsHistorySplitUploadsHistoryFileAndKeepsLatestPrompt(t *testing.T) {
+func TestChatCompletionsHistorySplitInlinesHistoryAndKeepsLatestPrompt(t *testing.T) {
 	ds := &inlineUploadDSStub{}
 	h := &openAITestSurface{
 		Store: mockOpenAIConfig{
@@ -206,22 +203,8 @@ func TestChatCompletionsHistorySplitUploadsHistoryFileAndKeepsLatestPrompt(t *te
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if len(ds.uploadCalls) != 1 {
-		t.Fatalf("expected 1 upload call, got %d", len(ds.uploadCalls))
-	}
-	upload := ds.uploadCalls[0]
-	if upload.Filename != "HISTORY.txt" {
-		t.Fatalf("unexpected upload filename: %q", upload.Filename)
-	}
-	if upload.Purpose != "assistants" {
-		t.Fatalf("unexpected purpose: %q", upload.Purpose)
-	}
-	historyText := string(upload.Data)
-	if !strings.Contains(historyText, "[file content end]") || !strings.Contains(historyText, "[file name]: IGNORE") {
-		t.Fatalf("expected injected IGNORE wrapper, got %s", historyText)
-	}
-	if strings.Contains(historyText, "latest user turn") {
-		t.Fatalf("expected latest turn to remain live, got %s", historyText)
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no upload call, got %d", len(ds.uploadCalls))
 	}
 	if ds.completionReq == nil {
 		t.Fatal("expected completion payload to be captured")
@@ -230,16 +213,16 @@ func TestChatCompletionsHistorySplitUploadsHistoryFileAndKeepsLatestPrompt(t *te
 	if !strings.Contains(promptText, "latest user turn") {
 		t.Fatalf("expected latest turn in completion prompt, got %s", promptText)
 	}
-	if strings.Contains(promptText, "first user turn") {
-		t.Fatalf("expected historical turns removed from completion prompt, got %s", promptText)
+	if !strings.Contains(promptText, "Previous conversation history") || !strings.Contains(promptText, "first user turn") {
+		t.Fatalf("expected historical turns inline in completion prompt, got %s", promptText)
 	}
 	refIDs, _ := ds.completionReq["ref_file_ids"].([]any)
-	if len(refIDs) == 0 || refIDs[0] != "file-inline-1" {
-		t.Fatalf("expected uploaded history file to be first ref_file_id, got %#v", ds.completionReq["ref_file_ids"])
+	if len(refIDs) != 0 {
+		t.Fatalf("expected no uploaded history ref_file_id, got %#v", ds.completionReq["ref_file_ids"])
 	}
 }
 
-func TestResponsesHistorySplitUploadsHistoryAndKeepsLatestPrompt(t *testing.T) {
+func TestResponsesHistorySplitInlinesHistoryAndKeepsLatestPrompt(t *testing.T) {
 	ds := &inlineUploadDSStub{}
 	h := &openAITestSurface{
 		Store: mockOpenAIConfig{
@@ -267,8 +250,8 @@ func TestResponsesHistorySplitUploadsHistoryAndKeepsLatestPrompt(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if len(ds.uploadCalls) != 1 {
-		t.Fatalf("expected 1 upload call, got %d", len(ds.uploadCalls))
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no upload call, got %d", len(ds.uploadCalls))
 	}
 	if ds.completionReq == nil {
 		t.Fatal("expected completion payload to be captured")
@@ -277,104 +260,8 @@ func TestResponsesHistorySplitUploadsHistoryAndKeepsLatestPrompt(t *testing.T) {
 	if !strings.Contains(promptText, "latest user turn") {
 		t.Fatalf("expected latest turn in completion prompt, got %s", promptText)
 	}
-	if strings.Contains(promptText, "first user turn") {
-		t.Fatalf("expected historical turns removed from completion prompt, got %s", promptText)
-	}
-}
-
-func TestChatCompletionsHistorySplitMapsManagedAuthFailureTo401(t *testing.T) {
-	ds := &inlineUploadDSStub{
-		uploadErr: &dsclient.RequestFailure{Op: "upload file", Kind: dsclient.FailureManagedUnauthorized, Message: "expired token"},
-	}
-	h := &openAITestSurface{
-		Store: mockOpenAIConfig{
-			wideInput:           true,
-			historySplitEnabled: true,
-			historySplitTurns:   1,
-		},
-		Auth: streamStatusManagedAuthStub{},
-		DS:   ds,
-	}
-	reqBody, _ := json.Marshal(map[string]any{
-		"model":    "deepseek-v4-flash",
-		"messages": historySplitTestMessages(),
-		"stream":   false,
-	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(reqBody)))
-	req.Header.Set("Authorization", "Bearer managed-key")
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	h.ChatCompletions(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "Please re-login the account in admin") {
-		t.Fatalf("expected managed auth error message, got %s", rec.Body.String())
-	}
-}
-
-func TestResponsesHistorySplitMapsDirectAuthFailureTo401(t *testing.T) {
-	ds := &inlineUploadDSStub{
-		uploadErr: &dsclient.RequestFailure{Op: "upload file", Kind: dsclient.FailureDirectUnauthorized, Message: "invalid token"},
-	}
-	h := &openAITestSurface{
-		Store: mockOpenAIConfig{
-			wideInput:           true,
-			historySplitEnabled: true,
-			historySplitTurns:   1,
-		},
-		Auth: streamStatusAuthStub{},
-		DS:   ds,
-	}
-	r := chi.NewRouter()
-	registerOpenAITestRoutes(r, h)
-	reqBody, _ := json.Marshal(map[string]any{
-		"model":    "deepseek-v4-flash",
-		"messages": historySplitTestMessages(),
-		"stream":   false,
-	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(string(reqBody)))
-	req.Header.Set("Authorization", "Bearer direct-token")
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "Invalid token") {
-		t.Fatalf("expected direct auth error message, got %s", rec.Body.String())
-	}
-}
-
-func TestChatCompletionsHistorySplitUploadFailureReturnsInternalServerError(t *testing.T) {
-	ds := &inlineUploadDSStub{uploadErr: errors.New("boom")}
-	h := &openAITestSurface{
-		Store: mockOpenAIConfig{
-			wideInput:           true,
-			historySplitEnabled: true,
-			historySplitTurns:   1,
-		},
-		Auth: streamStatusAuthStub{},
-		DS:   ds,
-	}
-	reqBody, _ := json.Marshal(map[string]any{
-		"model":    "deepseek-v4-flash",
-		"messages": historySplitTestMessages(),
-		"stream":   false,
-	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(reqBody)))
-	req.Header.Set("Authorization", "Bearer direct-token")
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	h.ChatCompletions(rec, req)
-
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d body=%s", rec.Code, rec.Body.String())
+	if !strings.Contains(promptText, "Previous conversation history") || !strings.Contains(promptText, "first user turn") {
+		t.Fatalf("expected historical turns inline in completion prompt, got %s", promptText)
 	}
 }
 
@@ -407,14 +294,14 @@ func TestHistorySplitWorksAcrossAutoDeleteModes(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 			}
-			if len(ds.uploadCalls) != 1 {
-				t.Fatalf("expected history split upload for mode=%s, got %d", mode, len(ds.uploadCalls))
+			if len(ds.uploadCalls) != 0 {
+				t.Fatalf("expected no history split upload for mode=%s, got %d", mode, len(ds.uploadCalls))
 			}
 			if ds.completionReq == nil {
 				t.Fatalf("expected completion payload for mode=%s", mode)
 			}
 			promptText, _ := ds.completionReq["prompt"].(string)
-			if !strings.Contains(promptText, "latest user turn") || strings.Contains(promptText, "first user turn") {
+			if !strings.Contains(promptText, "latest user turn") || !strings.Contains(promptText, "first user turn") {
 				t.Fatalf("unexpected prompt for mode=%s: %s", mode, promptText)
 			}
 		})

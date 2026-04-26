@@ -3,19 +3,11 @@ package history
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	"ds2api/internal/auth"
-	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
-)
-
-const (
-	historySplitFilename    = "HISTORY.txt"
-	historySplitContentType = "text/plain; charset=utf-8"
-	historySplitPurpose     = "assistants"
 )
 
 type Service struct {
@@ -38,23 +30,9 @@ func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptco
 		return stdReq, errors.New("history split produced empty transcript")
 	}
 
-	result, err := s.DS.UploadFile(ctx, a, dsclient.UploadFileRequest{
-		Filename:    historySplitFilename,
-		ContentType: historySplitContentType,
-		Purpose:     historySplitPurpose,
-		Data:        []byte(historyText),
-	}, 3)
-	if err != nil {
-		return stdReq, fmt.Errorf("upload history file: %w", err)
-	}
-	fileID := strings.TrimSpace(result.ID)
-	if fileID == "" {
-		return stdReq, errors.New("upload history file returned empty file id")
-	}
-
+	promptMessages = injectHistoryContextMessage(promptMessages, historyText)
 	stdReq.Messages = promptMessages
 	stdReq.HistoryText = historyText
-	stdReq.RefFileIDs = prependUniqueRefFileID(stdReq.RefFileIDs, fileID)
 	stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPrompt(promptMessages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
 	return stdReq, nil
 }
@@ -111,19 +89,32 @@ func SplitOpenAIHistoryMessages(messages []any, triggerAfterTurns int) ([]any, [
 	return promptMessages, historyMessages
 }
 
-func prependUniqueRefFileID(existing []string, fileID string) []string {
-	fileID = strings.TrimSpace(fileID)
-	if fileID == "" {
-		return existing
+func injectHistoryContextMessage(messages []any, historyText string) []any {
+	historyText = strings.TrimSpace(historyText)
+	if historyText == "" {
+		return messages
 	}
-	out := make([]string, 0, len(existing)+1)
-	out = append(out, fileID)
-	for _, id := range existing {
-		trimmed := strings.TrimSpace(id)
-		if trimmed == "" || strings.EqualFold(trimmed, fileID) {
-			continue
+	historyMessage := map[string]any{
+		"role":    "system",
+		"content": "Use the following previous conversation history as context. It is not a file attachment.\n\n" + historyText,
+	}
+	out := make([]any, 0, len(messages)+1)
+	inserted := false
+	for i, raw := range messages {
+		if !inserted {
+			role := ""
+			if msg, ok := raw.(map[string]any); ok {
+				role = strings.ToLower(strings.TrimSpace(shared.AsString(msg["role"])))
+			}
+			if i > 0 && role != "system" && role != "developer" {
+				out = append(out, historyMessage)
+				inserted = true
+			}
 		}
-		out = append(out, trimmed)
+		out = append(out, raw)
+	}
+	if !inserted {
+		out = append(out, historyMessage)
 	}
 	return out
 }

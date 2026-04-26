@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"ds2api/internal/auth"
-	dsclient "ds2api/internal/deepseek/client"
 )
 
 func TestIsVercelStreamPrepareRequest(t *testing.T) {
@@ -118,8 +117,8 @@ func TestHandleVercelStreamPrepareAppliesHistorySplit(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if len(ds.uploadCalls) != 1 {
-		t.Fatalf("expected 1 history upload, got %d", len(ds.uploadCalls))
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no history upload, got %d", len(ds.uploadCalls))
 	}
 
 	var body map[string]any
@@ -134,22 +133,20 @@ func TestHandleVercelStreamPrepareAppliesHistorySplit(t *testing.T) {
 	if !strings.Contains(promptText, "latest user turn") {
 		t.Fatalf("expected latest user turn in prompt, got %s", promptText)
 	}
-	if strings.Contains(promptText, "first user turn") {
-		t.Fatalf("expected historical turns removed from prompt, got %s", promptText)
+	if !strings.Contains(promptText, "Previous conversation history") || !strings.Contains(promptText, "first user turn") {
+		t.Fatalf("expected historical turns inline in prompt, got %s", promptText)
 	}
 	refIDs, _ := payload["ref_file_ids"].([]any)
-	if len(refIDs) == 0 || refIDs[0] != "file-inline-1" {
-		t.Fatalf("expected uploaded history file first in ref_file_ids, got %#v", payload["ref_file_ids"])
+	if len(refIDs) != 0 {
+		t.Fatalf("expected no uploaded history file in ref_file_ids, got %#v", payload["ref_file_ids"])
 	}
 }
 
-func TestHandleVercelStreamPrepareMapsHistorySplitManagedAuthFailureTo401(t *testing.T) {
+func TestHandleVercelStreamPrepareHistorySplitDoesNotUpload(t *testing.T) {
 	t.Setenv("VERCEL", "1")
 	t.Setenv("DS2API_VERCEL_INTERNAL_SECRET", "stream-secret")
 
-	ds := &inlineUploadDSStub{
-		uploadErr: &dsclient.RequestFailure{Op: "upload file", Kind: dsclient.FailureManagedUnauthorized, Message: "expired token"},
-	}
+	ds := &inlineUploadDSStub{}
 	h := &Handler{
 		Store: mockOpenAIConfig{
 			wideInput:           true,
@@ -173,10 +170,10 @@ func TestHandleVercelStreamPrepareMapsHistorySplitManagedAuthFailureTo401(t *tes
 
 	h.handleVercelStreamPrepare(rec, req)
 
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Please re-login the account in admin") {
-		t.Fatalf("expected managed auth error message, got %s", rec.Body.String())
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no history upload, got %d", len(ds.uploadCalls))
 	}
 }

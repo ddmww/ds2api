@@ -9,8 +9,24 @@ import (
 )
 
 func injectToolPrompt(messages []map[string]any, tools []any, policy ToolChoicePolicy) ([]map[string]any, []string) {
+	toolPrompt, names := buildOpenAIToolSystemPrompt(tools, policy)
+	if strings.TrimSpace(toolPrompt) == "" {
+		return messages, names
+	}
+	for i := range messages {
+		if messages[i]["role"] == "system" {
+			old, _ := messages[i]["content"].(string)
+			messages[i]["content"] = strings.TrimSpace(old + "\n\n" + toolPrompt)
+			return messages, names
+		}
+	}
+	messages = append([]map[string]any{{"role": "system", "content": toolPrompt}}, messages...)
+	return messages, names
+}
+
+func buildOpenAIToolSystemPrompt(tools []any, policy ToolChoicePolicy) (string, []string) {
 	if policy.IsNone() {
-		return messages, nil
+		return "", nil
 	}
 	toolSchemas := make([]string, 0, len(tools))
 	names := make([]string, 0, len(tools))
@@ -49,7 +65,7 @@ func injectToolPrompt(messages []map[string]any, tools []any, policy ToolChoiceP
 		toolSchemas = append(toolSchemas, fmt.Sprintf("Tool: %s\nDescription: %s\nParameters: %s", name, desc, string(b)))
 	}
 	if len(toolSchemas) == 0 {
-		return messages, names
+		return "", names
 	}
 	toolPrompt := "You have access to these tools:\n\n" + strings.Join(toolSchemas, "\n\n") + "\n\n" + toolcall.BuildToolCallInstructions(names)
 	if policy.Mode == ToolChoiceRequired {
@@ -59,14 +75,5 @@ func injectToolPrompt(messages []map[string]any, tools []any, policy ToolChoiceP
 		toolPrompt += "\n7) For this response, you MUST call exactly this tool name: " + strings.TrimSpace(policy.ForcedName)
 		toolPrompt += "\n8) Do not call any other tool."
 	}
-
-	for i := range messages {
-		if messages[i]["role"] == "system" {
-			old, _ := messages[i]["content"].(string)
-			messages[i]["content"] = strings.TrimSpace(old + "\n\n" + toolPrompt)
-			return messages, names
-		}
-	}
-	messages = append([]map[string]any{{"role": "system", "content": toolPrompt}}, messages...)
-	return messages, names
+	return toolPrompt, names
 }

@@ -263,7 +263,7 @@ func TestNormalizeOpenAIMessagesForPrompt_AssistantNilContentDoesNotInjectNullLi
 	}
 }
 
-func TestNormalizeOpenAIMessagesForPrompt_DeveloperRoleMapsToSystem(t *testing.T) {
+func TestNormalizeOpenAIMessagesForPrompt_DeveloperRolePreserved(t *testing.T) {
 	raw := []any{
 		map[string]any{"role": "developer", "content": "必须先走工具调用"},
 		map[string]any{"role": "user", "content": "你好"},
@@ -272,8 +272,8 @@ func TestNormalizeOpenAIMessagesForPrompt_DeveloperRoleMapsToSystem(t *testing.T
 	if len(normalized) != 2 {
 		t.Fatalf("expected 2 normalized messages, got %d", len(normalized))
 	}
-	if normalized[0]["role"] != "system" {
-		t.Fatalf("expected developer role converted to system, got %#v", normalized[0]["role"])
+	if normalized[0]["role"] != "developer" {
+		t.Fatalf("expected developer role preserved, got %#v", normalized[0]["role"])
 	}
 }
 
@@ -297,7 +297,7 @@ func TestNormalizeOpenAIMessagesForPrompt_AssistantArrayContentFallbackWhenTextE
 	}
 }
 
-func TestNormalizeOpenAIMessagesForPrompt_AssistantReasoningContentPreserved(t *testing.T) {
+func TestNormalizeOpenAIMessagesForPrompt_AssistantReasoningContentIgnored(t *testing.T) {
 	raw := []any{
 		map[string]any{
 			"role":              "assistant",
@@ -311,16 +311,10 @@ func TestNormalizeOpenAIMessagesForPrompt_AssistantReasoningContentPreserved(t *
 		t.Fatalf("expected one normalized assistant message, got %#v", normalized)
 	}
 	content, _ := normalized[0]["content"].(string)
-	if !strings.Contains(content, "[reasoning_content]") {
-		t.Fatalf("expected labeled reasoning block in assistant content, got %q", content)
-	}
-	if !strings.Contains(content, "internal reasoning") {
-		t.Fatalf("expected reasoning text in assistant content, got %q", content)
+	if strings.Contains(content, "[reasoning_content]") || strings.Contains(content, "internal reasoning") {
+		t.Fatalf("expected reasoning content omitted from assistant prompt history, got %q", content)
 	}
 	if !strings.Contains(content, "visible answer") {
 		t.Fatalf("expected visible answer in assistant content, got %q", content)
-	}
-	if reasoningIdx := strings.Index(content, "[reasoning_content]"); reasoningIdx < 0 || reasoningIdx > strings.Index(content, "visible answer") {
-		t.Fatalf("expected reasoning block before visible answer, got %q", content)
 	}
 }

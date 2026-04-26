@@ -35,7 +35,7 @@ func NormalizeOpenAIMessagesForPrompt(raw []any, traceID string) []map[string]an
 			})
 		case "user", "system", "developer":
 			out = append(out, map[string]any{
-				"role":    normalizeOpenAIRoleForPrompt(role),
+				"role":    role,
 				"content": NormalizeOpenAIContentForPrompt(msg["content"]),
 			})
 		default:
@@ -47,7 +47,7 @@ func NormalizeOpenAIMessagesForPrompt(raw []any, traceID string) []map[string]an
 				role = "user"
 			}
 			out = append(out, map[string]any{
-				"role":    normalizeOpenAIRoleForPrompt(role),
+				"role":    role,
 				"content": content,
 			})
 		}
@@ -57,15 +57,8 @@ func NormalizeOpenAIMessagesForPrompt(raw []any, traceID string) []map[string]an
 
 func buildAssistantContentForPrompt(msg map[string]any) string {
 	content := strings.TrimSpace(NormalizeOpenAIContentForPrompt(msg["content"]))
-	reasoning := strings.TrimSpace(normalizeOpenAIReasoningContentForPrompt(msg["reasoning_content"]))
-	if reasoning == "" {
-		reasoning = strings.TrimSpace(extractOpenAIReasoningContentFromMessage(msg["content"]))
-	}
 	toolHistory := prompt.FormatToolCallsForPrompt(msg["tool_calls"])
-	parts := make([]string, 0, 3)
-	if reasoning != "" {
-		parts = append(parts, formatPromptLabeledBlock(assistantReasoningLabel, reasoning))
-	}
+	parts := make([]string, 0, 2)
 	if content != "" {
 		parts = append(parts, content)
 	}
@@ -162,8 +155,8 @@ func NormalizeOpenAIContentForPrompt(v any) string {
 
 func normalizeOpenAIRoleForPrompt(role string) string {
 	role = strings.ToLower(strings.TrimSpace(role))
-	if role == "developer" {
-		return "system"
+	if role == "" {
+		return "user"
 	}
 	return role
 }
