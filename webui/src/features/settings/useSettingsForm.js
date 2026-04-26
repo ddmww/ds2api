@@ -16,6 +16,12 @@ const DEFAULT_FORM = {
     compat: { strip_reference_markers: true },
     responses: { store_ttl_seconds: 900 },
     embeddings: { provider: '' },
+    upstream_blocker: {
+        enabled: false,
+        case_sensitive: false,
+        keywords_text: '',
+        message: '上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。',
+    },
     auto_delete: { mode: 'none' },
     history_split: { enabled: true, trigger_after_turns: 1 },
     model_aliases_text: '{}',
@@ -67,6 +73,14 @@ function fromServerForm(data) {
         embeddings: {
             provider: data.embeddings?.provider || '',
         },
+        upstream_blocker: {
+            enabled: Boolean(data.upstream_blocker?.enabled),
+            case_sensitive: Boolean(data.upstream_blocker?.case_sensitive),
+            keywords_text: Array.isArray(data.upstream_blocker?.keywords)
+                ? data.upstream_blocker.keywords.join('\n')
+                : String(data.upstream_blocker?.keywords || ''),
+            message: data.upstream_blocker?.message || '上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。',
+        },
         auto_delete: {
             mode: normalizeAutoDeleteMode(data.auto_delete),
         },
@@ -92,6 +106,15 @@ function toServerPayload(form) {
         },
         responses: { store_ttl_seconds: Number(form.responses.store_ttl_seconds) },
         embeddings: { provider: String(form.embeddings.provider || '').trim() },
+        upstream_blocker: {
+            enabled: Boolean(form.upstream_blocker?.enabled),
+            case_sensitive: Boolean(form.upstream_blocker?.case_sensitive),
+            keywords: String(form.upstream_blocker?.keywords_text || '')
+                .split(/\r\n|\r|\n/)
+                .map((item) => item.trim())
+                .filter(Boolean),
+            message: String(form.upstream_blocker?.message || '').trim(),
+        },
         auto_delete: { mode: normalizeAutoDeleteMode(form.auto_delete) },
         history_split: {
             enabled: true,

@@ -44,6 +44,9 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(c.Embeddings.Provider) != "" {
 		m["embeddings"] = c.Embeddings
 	}
+	if c.UpstreamBlocker.Enabled || c.UpstreamBlocker.CaseSensitive || len(c.UpstreamBlocker.Keywords) > 0 || strings.TrimSpace(c.UpstreamBlocker.Message) != "" {
+		m["upstream_blocker"] = c.UpstreamBlocker
+	}
 	m["auto_delete"] = c.AutoDelete
 	if c.HistorySplit.Enabled != nil || c.HistorySplit.TriggerAfterTurns != nil {
 		m["history_split"] = c.HistorySplit
@@ -110,6 +113,10 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 			if err := json.Unmarshal(v, &c.Embeddings); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
 			}
+		case "upstream_blocker":
+			if err := json.Unmarshal(v, &c.UpstreamBlocker); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
 		case "auto_delete":
 			if err := json.Unmarshal(v, &c.AutoDelete); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
@@ -152,6 +159,12 @@ func (c Config) Clone() Config {
 		},
 		Responses:  c.Responses,
 		Embeddings: c.Embeddings,
+		UpstreamBlocker: UpstreamBlockerConfig{
+			Enabled:       c.UpstreamBlocker.Enabled,
+			CaseSensitive: c.UpstreamBlocker.CaseSensitive,
+			Keywords:      slices.Clone(c.UpstreamBlocker.Keywords),
+			Message:       c.UpstreamBlocker.Message,
+		},
 		AutoDelete: c.AutoDelete,
 		HistorySplit: HistorySplitConfig{
 			Enabled:           cloneBoolPtr(c.HistorySplit.Enabled),
@@ -165,6 +178,47 @@ func (c Config) Clone() Config {
 		clone.AdditionalFields[k] = v
 	}
 	return clone
+}
+
+func (c *UpstreamBlockerConfig) UnmarshalJSON(b []byte) error {
+	type alias UpstreamBlockerConfig
+	var raw struct {
+		alias
+		Keywords json.RawMessage `json:"keywords"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	*c = UpstreamBlockerConfig(raw.alias)
+	if len(raw.Keywords) == 0 || string(raw.Keywords) == "null" {
+		c.Keywords = nil
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal(raw.Keywords, &list); err == nil {
+		c.Keywords = list
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(raw.Keywords, &text); err == nil {
+		c.Keywords = splitUpstreamBlockerKeywords(text)
+		return nil
+	}
+	return fmt.Errorf("keywords must be an array or newline-delimited string")
+}
+
+func splitUpstreamBlockerKeywords(text string) []string {
+	parts := strings.FieldsFunc(text, func(r rune) bool {
+		return r == '\r' || r == '\n'
+	})
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func cloneStringMap(in map[string]string) map[string]string {

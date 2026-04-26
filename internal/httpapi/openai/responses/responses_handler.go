@@ -15,6 +15,7 @@ import (
 	"ds2api/internal/config"
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
+	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
@@ -134,6 +135,10 @@ func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, resp *http.Res
 	sanitizedText := cleanVisibleOutput(result.Text, stripReferenceMarkers)
 	if searchEnabled {
 		sanitizedText = replaceCitationMarkersWithLinks(sanitizedText, result.CitationLinks)
+	}
+	if err := shared.AssertUpstreamAllowed(h.Store, sanitizedThinking+"\n"+sanitizedText); err != nil {
+		shared.WriteUpstreamBlockedError(w, err)
+		return
 	}
 	if writeUpstreamEmptyOutputError(w, sanitizedText, sanitizedThinking, result.ContentFilter) {
 		return

@@ -21,6 +21,9 @@ func ValidateConfig(c Config) error {
 	if err := ValidateEmbeddingsConfig(c.Embeddings); err != nil {
 		return err
 	}
+	if err := ValidateUpstreamBlockerConfig(c.UpstreamBlocker); err != nil {
+		return err
+	}
 	if err := ValidateAutoDeleteConfig(c.AutoDelete); err != nil {
 		return err
 	}
@@ -108,6 +111,30 @@ func ValidateResponsesConfig(responses ResponsesConfig) error {
 
 func ValidateEmbeddingsConfig(embeddings EmbeddingsConfig) error {
 	return ValidateTrimmedString("embeddings.provider", embeddings.Provider, false)
+}
+
+func ValidateUpstreamBlockerConfig(blocker UpstreamBlockerConfig) error {
+	if err := ValidateTrimmedString("upstream_blocker.message", blocker.Message, false); err != nil {
+		return err
+	}
+	seen := map[string]struct{}{}
+	count := 0
+	for _, keyword := range blocker.Keywords {
+		trimmed := strings.TrimSpace(keyword)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		count++
+	}
+	if blocker.Enabled && count == 0 {
+		return fmt.Errorf("upstream_blocker.keywords cannot be empty when upstream_blocker.enabled is true")
+	}
+	return nil
 }
 
 func ValidateAutoDeleteConfig(autoDelete AutoDeleteConfig) error {

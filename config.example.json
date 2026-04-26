@@ -57,6 +57,16 @@
   "embeddings": {
     "provider": "deterministic"
   },
+  "upstream_blocker": {
+    "enabled": false,
+    "case_sensitive": false,
+    "keywords": [
+      "sorry",
+      "我无法",
+      "拒绝此请求"
+    ],
+    "message": "上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。"
+  },
   "admin": {
     "jwt_expire_hours": 24
   },

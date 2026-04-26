@@ -62,6 +62,17 @@ func (s *Store) EmbeddingsProvider() string {
 	return strings.TrimSpace(s.cfg.Embeddings.Provider)
 }
 
+func (s *Store) UpstreamBlockerConfig() UpstreamBlockerConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return UpstreamBlockerConfig{
+		Enabled:       s.cfg.UpstreamBlocker.Enabled,
+		CaseSensitive: s.cfg.UpstreamBlocker.CaseSensitive,
+		Keywords:      append([]string(nil), s.cfg.UpstreamBlocker.Keywords...),
+		Message:       s.cfg.UpstreamBlocker.Message,
+	}
+}
+
 func (s *Store) AutoDeleteMode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

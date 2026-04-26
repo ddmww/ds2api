@@ -17,7 +17,7 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminCfg, runtimeCfg, compatCfg, responsesCfg, embeddingsCfg, autoDeleteCfg, historySplitCfg, aliasMap, err := parseSettingsUpdateRequest(req)
+	adminCfg, runtimeCfg, compatCfg, responsesCfg, embeddingsCfg, blockerCfg, autoDeleteCfg, historySplitCfg, aliasMap, err := parseSettingsUpdateRequest(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
@@ -62,6 +62,9 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if embeddingsCfg != nil && strings.TrimSpace(embeddingsCfg.Provider) != "" {
 			c.Embeddings.Provider = strings.TrimSpace(embeddingsCfg.Provider)
+		}
+		if blockerCfg != nil {
+			c.UpstreamBlocker = *blockerCfg
 		}
 		if autoDeleteCfg != nil {
 			c.AutoDelete.Mode = autoDeleteCfg.Mode

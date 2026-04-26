@@ -29,6 +29,86 @@ export default function BehaviorSection({ t, form, setForm }) {
                     />
                 </label>
             </div>
+            <div className="border-t border-border pt-4 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
+                        <h4 className="text-sm font-medium">{t('settings.upstreamBlockerTitle')}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">{t('settings.upstreamBlockerDesc')}</p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(form.upstream_blocker?.enabled)}
+                        onClick={() => setForm((prev) => ({
+                            ...prev,
+                            upstream_blocker: {
+                                ...prev.upstream_blocker,
+                                enabled: !Boolean(prev.upstream_blocker?.enabled),
+                            },
+                        }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            form.upstream_blocker?.enabled ? 'bg-primary' : 'bg-muted'
+                        }`}
+                    >
+                        <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                form.upstream_blocker?.enabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                    </button>
+                </div>
+                <label className="text-sm space-y-2 block">
+                    <span className="text-muted-foreground">{t('settings.upstreamBlockerKeywords')}</span>
+                    <textarea
+                        rows={5}
+                        value={form.upstream_blocker?.keywords_text || ''}
+                        onChange={(e) => setForm((prev) => ({
+                            ...prev,
+                            upstream_blocker: { ...prev.upstream_blocker, keywords_text: e.target.value },
+                        }))}
+                        placeholder="sorry&#10;我无法&#10;拒绝此请求"
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2 font-mono text-xs"
+                    />
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="text-sm space-y-2">
+                        <span className="text-muted-foreground">{t('settings.upstreamBlockerMessage')}</span>
+                        <input
+                            type="text"
+                            value={form.upstream_blocker?.message || ''}
+                            onChange={(e) => setForm((prev) => ({
+                                ...prev,
+                                upstream_blocker: { ...prev.upstream_blocker, message: e.target.value },
+                            }))}
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2"
+                        />
+                    </label>
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2">
+                        <span className="text-sm text-muted-foreground">{t('settings.upstreamBlockerCaseSensitive')}</span>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={Boolean(form.upstream_blocker?.case_sensitive)}
+                            onClick={() => setForm((prev) => ({
+                                ...prev,
+                                upstream_blocker: {
+                                    ...prev.upstream_blocker,
+                                    case_sensitive: !Boolean(prev.upstream_blocker?.case_sensitive),
+                                },
+                            }))}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                form.upstream_blocker?.case_sensitive ? 'bg-primary' : 'bg-muted'
+                            }`}
+                        >
+                            <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                    form.upstream_blocker?.case_sensitive ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                            />
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     )
 }

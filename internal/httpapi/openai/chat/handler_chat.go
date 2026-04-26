@@ -12,6 +12,7 @@ import (
 	"ds2api/internal/config"
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
+	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
@@ -161,6 +162,13 @@ func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, co
 	finalText := cleanVisibleOutput(result.Text, stripReferenceMarkers)
 	if searchEnabled {
 		finalText = replaceCitationMarkersWithLinks(finalText, result.CitationLinks)
+	}
+	if err := shared.AssertUpstreamAllowed(h.Store, finalThinking+"\n"+finalText); err != nil {
+		if historySession != nil {
+			historySession.error(http.StatusForbidden, err.Error(), "upstream_blocked", finalThinking, finalText)
+		}
+		shared.WriteUpstreamBlockedError(w, err)
+		return
 	}
 	if shouldWriteUpstreamEmptyOutputError(finalText) {
 		status, message, code := upstreamEmptyOutputDetail(result.ContentFilter, finalText, finalThinking)

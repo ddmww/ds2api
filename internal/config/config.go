@@ -8,21 +8,22 @@ import (
 )
 
 type Config struct {
-	Keys             []string           `json:"keys,omitempty"`
-	APIKeys          []APIKey           `json:"api_keys,omitempty"`
-	Accounts         []Account          `json:"accounts,omitempty"`
-	Proxies          []Proxy            `json:"proxies,omitempty"`
-	ModelAliases     map[string]string  `json:"model_aliases,omitempty"`
-	Admin            AdminConfig        `json:"admin,omitempty"`
-	Runtime          RuntimeConfig      `json:"runtime,omitempty"`
-	Compat           CompatConfig       `json:"compat,omitempty"`
-	Responses        ResponsesConfig    `json:"responses,omitempty"`
-	Embeddings       EmbeddingsConfig   `json:"embeddings,omitempty"`
-	AutoDelete       AutoDeleteConfig   `json:"auto_delete"`
-	HistorySplit     HistorySplitConfig `json:"history_split"`
-	VercelSyncHash   string             `json:"_vercel_sync_hash,omitempty"`
-	VercelSyncTime   int64              `json:"_vercel_sync_time,omitempty"`
-	AdditionalFields map[string]any     `json:"-"`
+	Keys             []string              `json:"keys,omitempty"`
+	APIKeys          []APIKey              `json:"api_keys,omitempty"`
+	Accounts         []Account             `json:"accounts,omitempty"`
+	Proxies          []Proxy               `json:"proxies,omitempty"`
+	ModelAliases     map[string]string     `json:"model_aliases,omitempty"`
+	Admin            AdminConfig           `json:"admin,omitempty"`
+	Runtime          RuntimeConfig         `json:"runtime,omitempty"`
+	Compat           CompatConfig          `json:"compat,omitempty"`
+	Responses        ResponsesConfig       `json:"responses,omitempty"`
+	Embeddings       EmbeddingsConfig      `json:"embeddings,omitempty"`
+	UpstreamBlocker  UpstreamBlockerConfig `json:"upstream_blocker,omitempty"`
+	AutoDelete       AutoDeleteConfig      `json:"auto_delete"`
+	HistorySplit     HistorySplitConfig    `json:"history_split"`
+	VercelSyncHash   string                `json:"_vercel_sync_hash,omitempty"`
+	VercelSyncTime   int64                 `json:"_vercel_sync_time,omitempty"`
+	AdditionalFields map[string]any        `json:"-"`
 }
 
 type Account struct {
@@ -173,6 +174,13 @@ type ResponsesConfig struct {
 
 type EmbeddingsConfig struct {
 	Provider string `json:"provider,omitempty"`
+}
+
+type UpstreamBlockerConfig struct {
+	Enabled       bool     `json:"enabled,omitempty"`
+	CaseSensitive bool     `json:"case_sensitive,omitempty"`
+	Keywords      []string `json:"keywords,omitempty"`
+	Message       string   `json:"message,omitempty"`
 }
 
 type AutoDeleteConfig struct {
