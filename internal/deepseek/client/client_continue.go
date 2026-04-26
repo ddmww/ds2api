@@ -19,7 +19,9 @@ import (
 
 const defaultAutoContinueLimit = 8
 
-type continueOpenFunc func(context.Context, string, int) (*http.Response, error)
+var errCompletionContinueFailed = errors.New("completion continuation failed")
+
+type continueOpenFunc func(context.Context, *continueState) (*http.Response, error)
 
 type continueState struct {
 	sessionID         string
@@ -30,14 +32,17 @@ type continueState struct {
 	currentType       string
 	text              strings.Builder
 	thinking          strings.Builder
+	basePayload       map[string]any
+	originalPrompt    string
+	pendingStatus     [][]byte
 	truncationEnabled bool
 	plainTextContinue bool
 	minChars          int
 }
 
 // wrapCompletionWithAutoContinue wraps the completion response body so that
-// if the visible output looks incomplete, ds2api will automatically call the
-// DeepSeek continue endpoint and splice the continuation SSE stream onto the
+// if the visible output looks incomplete, ds2api rebuilds a cursor2api-style
+// continuation prompt and splices the next completion SSE stream onto the
 // original.
 // The caller sees a single, seamless SSE stream.
 func (c *Client) wrapCompletionWithAutoContinue(ctx context.Context, a *auth.RequestAuth, payload map[string]any, powResp string, resp *http.Response) *http.Response {
@@ -49,6 +54,7 @@ func (c *Client) wrapCompletionWithAutoContinue(ctx context.Context, a *auth.Req
 	if sessionID == "" {
 		return resp
 	}
+	originalPrompt, _ := payload["prompt"].(string)
 	thinkingEnabled, _ := payload["thinking_enabled"].(bool)
 	truncationEnabled, plainTextContinue, truncationMaxRounds, truncationMinChars := c.truncationAutoContinueSettings()
 	config.Logger.Debug("[auto_continue] wrapping completion response", "session_id", sessionID)
@@ -56,11 +62,13 @@ func (c *Client) wrapCompletionWithAutoContinue(ctx context.Context, a *auth.Req
 		sessionID:         sessionID,
 		thinkingEnabled:   thinkingEnabled,
 		currentType:       initialSSEPartType(thinkingEnabled),
+		basePayload:       clonePayloadMap(payload),
+		originalPrompt:    originalPrompt,
 		truncationEnabled: truncationEnabled,
 		plainTextContinue: plainTextContinue,
 		minChars:          truncationMinChars,
-	}, defaultAutoContinueLimit, truncationMaxRounds, func(ctx context.Context, sessionID string, responseMessageID int) (*http.Response, error) {
-		return c.callContinue(ctx, a, sessionID, responseMessageID, powResp)
+	}, defaultAutoContinueLimit, truncationMaxRounds, func(ctx context.Context, state *continueState) (*http.Response, error) {
+		return c.callContinuationCompletion(ctx, a, powResp, state)
 	})
 	return resp
 }
@@ -72,22 +80,20 @@ func (c *Client) truncationAutoContinueSettings() (enabled bool, plainText bool,
 	return c.Store.TruncationAutoContinueSettings()
 }
 
-// callContinue sends a continue request to DeepSeek to resume generation.
-func (c *Client) callContinue(ctx context.Context, a *auth.RequestAuth, sessionID string, responseMessageID int, powResp string) (*http.Response, error) {
-	if strings.TrimSpace(sessionID) == "" || responseMessageID <= 0 {
-		return nil, errors.New("missing continue identifiers")
+// callContinuationCompletion sends a normal completion request with the
+// cursor2api-style assistant replay + user continuation instruction. It
+// deliberately avoids DeepSeek's native /chat/continue endpoint.
+func (c *Client) callContinuationCompletion(ctx context.Context, a *auth.RequestAuth, powResp string, state *continueState) (*http.Response, error) {
+	if state == nil {
+		return nil, errCompletionContinueFailed
 	}
 	clients := c.requestClientsForAuth(ctx, a)
 	headers := c.authHeaders(a.DeepSeekToken)
 	headers["x-ds-pow-response"] = powResp
-	payload := map[string]any{
-		"chat_session_id":    sessionID,
-		"message_id":         responseMessageID,
-		"fallback_to_resume": true,
-	}
-	config.Logger.Info("[auto_continue] calling continue", "session_id", sessionID, "message_id", responseMessageID)
-	captureSession := c.capture.Start("deepseek_continue", dsprotocol.DeepSeekContinueURL, a.AccountID, payload)
-	resp, err := c.streamPost(ctx, clients.stream, dsprotocol.DeepSeekContinueURL, headers, payload)
+	payload := buildContinuationCompletionPayload(state)
+	config.Logger.Info("[auto_continue] calling completion continuation", "session_id", state.sessionID, "message_id", state.responseMessageID)
+	captureSession := c.capture.Start("deepseek_completion_continue", dsprotocol.DeepSeekCompletionURL, a.AccountID, payload)
+	resp, err := c.streamPost(ctx, clients.stream, dsprotocol.DeepSeekCompletionURL, headers, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -96,9 +102,70 @@ func (c *Client) callContinue(ctx context.Context, a *auth.RequestAuth, sessionI
 	}
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
-		return nil, errors.New("continue failed")
+		return nil, errCompletionContinueFailed
 	}
 	return resp, nil
+}
+
+func buildContinuationCompletionPayload(state *continueState) map[string]any {
+	if state == nil {
+		return map[string]any{}
+	}
+	payload := clonePayloadMap(state.basePayload)
+	if len(payload) == 0 {
+		payload = map[string]any{}
+	}
+	payload["chat_session_id"] = state.sessionID
+	payload["parent_message_id"] = nil
+	payload["prompt"] = buildCursorStyleContinuationPrompt(state.originalPrompt, state.text.String())
+	return payload
+}
+
+func buildCursorStyleContinuationPrompt(originalPrompt, currentText string) string {
+	anchorText := currentText
+	const anchorLength = 500
+	anchorRunes := []rune(anchorText)
+	if len(anchorRunes) > anchorLength {
+		anchorText = string(anchorRunes[len(anchorRunes)-anchorLength:])
+	}
+	continuationPrompt := strings.Join([]string{
+		"Your previous response was cut off mid-output.",
+		"Here is the exact tail of your last assistant response:",
+		"",
+		"```text",
+		"..." + anchorText,
+		"```",
+		"",
+		"Resume from the very next character after the tail above.",
+		"Rules:",
+		"1. Output only the missing continuation text.",
+		"2. Do not repeat, paraphrase, or restart any content that already appeared.",
+		"3. Do not restart the current sentence, paragraph, list item, heading, code fence, XML/HTML block, status panel, or image prompt block.",
+		"4. If you are about to repeat previously written content, skip forward to the first not-yet-written token instead.",
+		"5. Do not add commentary, explanations, acknowledgements, or quotation marks around the continuation.",
+		"6. If the response is already complete, output nothing.",
+	}, "\n")
+
+	parts := []string{}
+	if strings.TrimSpace(originalPrompt) != "" {
+		parts = append(parts, strings.TrimSpace(originalPrompt))
+	}
+	if strings.TrimSpace(currentText) != "" {
+		parts = append(parts, "[assistant]: "+currentText)
+	}
+	parts = append(parts, "[user]: "+continuationPrompt)
+	return strings.TrimSpace(strings.Join(parts, "\n\n"))
+}
+
+func clonePayloadMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // newAutoContinueBody returns a new ReadCloser that transparently pumps
@@ -126,8 +193,9 @@ func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadClo
 	current := initial
 	rounds := 0
 	truncationRounds := 0
+	dedupeOutgoing := false
 	for {
-		hadDone, err := streamBodyWithContinueState(ctx, pw, current, &state)
+		hadDone, err := streamBodyWithContinueState(ctx, pw, current, &state, dedupeOutgoing)
 		_ = current.Close()
 		if err != nil {
 			_ = pw.CloseWithError(err)
@@ -144,7 +212,7 @@ func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadClo
 				truncationRounds++
 			}
 			config.Logger.Info("[auto_continue] continuing", "round", rounds, "session_id", state.sessionID, "message_id", state.responseMessageID, "status", state.lastStatus, "reason", reason)
-			nextResp, err := openContinue(ctx, state.sessionID, state.responseMessageID)
+			nextResp, err := openContinue(ctx, &state)
 			if err != nil {
 				config.Logger.Warn("[auto_continue] continue request failed", "round", rounds, "error", err)
 				if reason == "truncated" {
@@ -155,6 +223,7 @@ func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadClo
 			}
 			current = nextResp.Body
 			state.prepareForNextRound()
+			dedupeOutgoing = true
 			continue
 		}
 		if shouldContinue && reason == "truncated" && truncationRounds >= truncationMaxRounds {
@@ -162,10 +231,18 @@ func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadClo
 		}
 		// Emit the final [DONE] sentinel if the upstream had one.
 		if hadDone {
+			if err := writePendingStatusLines(pw, &state); err != nil {
+				_ = pw.CloseWithError(err)
+				return
+			}
 			if _, err := io.Copy(pw, bytes.NewBufferString("data: [DONE]\n")); err != nil {
 				_ = pw.CloseWithError(err)
 			}
 		}
+		return
+	}
+	if err := writePendingStatusLines(pw, &state); err != nil {
+		_ = pw.CloseWithError(err)
 		return
 	}
 	if _, err := io.Copy(pw, bytes.NewBufferString("data: [DONE]\n")); err != nil {
@@ -177,7 +254,7 @@ func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadClo
 // line through to pw while observing state signals. Intermediate [DONE]
 // sentinels are consumed (not forwarded) so that the downstream only sees
 // one final [DONE] at the very end.
-func streamBodyWithContinueState(ctx context.Context, pw *io.PipeWriter, body io.Reader, state *continueState) (bool, error) {
+func streamBodyWithContinueState(ctx context.Context, pw *io.PipeWriter, body io.Reader, state *continueState, dedupeOutgoing bool) (bool, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
 	hadDone := false
@@ -192,10 +269,25 @@ func streamBodyWithContinueState(ctx context.Context, pw *io.PipeWriter, body io
 		if trimmed == "" {
 			continue
 		}
+		if dedupeOutgoing {
+			rewritten, skip := dedupeContinuationContentLine(line, state)
+			if skip {
+				continue
+			}
+			if len(rewritten) > 0 {
+				line = rewritten
+				trimmed = strings.TrimSpace(string(line))
+			}
+		}
 		if strings.HasPrefix(trimmed, "data:") {
 			data := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 			if data == "[DONE]" {
 				hadDone = true
+				continue
+			}
+			if isDeferredStatusLine(data) {
+				state.observe(data)
+				state.pendingStatus = append(state.pendingStatus, append([]byte{}, line...))
 				continue
 			}
 			state.observe(data)
@@ -206,6 +298,85 @@ func streamBodyWithContinueState(ctx context.Context, pw *io.PipeWriter, body io
 		}
 	}
 	return hadDone, scanner.Err()
+}
+
+func writePendingStatusLines(pw *io.PipeWriter, state *continueState) error {
+	if state == nil || len(state.pendingStatus) == 0 {
+		return nil
+	}
+	for _, line := range state.pendingStatus {
+		if _, err := io.Copy(pw, bytes.NewReader(append(line, '\n'))); err != nil {
+			return err
+		}
+	}
+	state.pendingStatus = nil
+	return nil
+}
+
+func isDeferredStatusLine(data string) bool {
+	var chunk map[string]any
+	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		return false
+	}
+	if code, _ := chunk["code"].(string); strings.EqualFold(strings.TrimSpace(code), "content_filter") {
+		return true
+	}
+	if p, _ := chunk["p"].(string); p == "response/status" || p == "status" {
+		return true
+	}
+	return false
+}
+
+func dedupeContinuationContentLine(line []byte, state *continueState) ([]byte, bool) {
+	if state == nil {
+		return nil, false
+	}
+	trimmed := strings.TrimSpace(string(line))
+	if !strings.HasPrefix(trimmed, "data:") {
+		return nil, false
+	}
+	data := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
+	if data == "" || data == "[DONE]" {
+		return nil, false
+	}
+	var chunk map[string]any
+	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+		return nil, false
+	}
+	v, ok := chunk["v"].(string)
+	if !ok || v == "" {
+		return nil, false
+	}
+	path, _ := chunk["p"].(string)
+	partType := "text"
+	switch {
+	case path == "response/thinking_content":
+		partType = "thinking"
+	case path == "response/content":
+		partType = "text"
+	case path == "":
+		partType = state.currentType
+	default:
+		return nil, false
+	}
+	if partType == "thinking" {
+		deduped := truncation.DeduplicateContinuation(state.thinking.String(), v)
+		if deduped == "" {
+			return nil, true
+		}
+		chunk["v"] = deduped
+	} else {
+		deduped := truncation.DeduplicateContinuation(state.text.String(), v)
+		if deduped == "" {
+			return nil, true
+		}
+		chunk["v"] = deduped
+	}
+	encoded, err := json.Marshal(chunk)
+	if err != nil {
+		return nil, false
+	}
+	return append([]byte("data: "), encoded...), false
 }
 
 func (s *continueState) observeContentLine(line []byte) {
@@ -294,7 +465,7 @@ func (s *continueState) shouldContinue() (bool, string) {
 	if s == nil {
 		return false, ""
 	}
-	if !s.truncationEnabled || s.responseMessageID <= 0 || strings.TrimSpace(s.sessionID) == "" {
+	if !s.truncationEnabled || strings.TrimSpace(s.sessionID) == "" {
 		return false, ""
 	}
 	if truncation.ShouldContinue(s.text.String(), s.plainTextContinue, s.minChars) {
@@ -312,6 +483,7 @@ func (s *continueState) prepareForNextRound() {
 	s.finished = false
 	s.lastStatus = ""
 	s.currentType = initialSSEPartType(s.thinkingEnabled)
+	s.pendingStatus = nil
 }
 
 func initialSSEPartType(thinkingEnabled bool) string {

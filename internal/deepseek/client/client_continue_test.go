@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	dsprotocol "ds2api/internal/deepseek/protocol"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -27,9 +28,10 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
-func TestCallContinuePropagatesPowHeaderToFallbackRequest(t *testing.T) {
+func TestCallContinuationCompletionPropagatesPowHeaderAndRebuildsPrompt(t *testing.T) {
 	var seenPow string
 	var seenURL string
+	var seenPayload map[string]any
 
 	client := &Client{
 		stream: failingDoer{err: errors.New("stream transport failed")},
@@ -37,6 +39,9 @@ func TestCallContinuePropagatesPowHeaderToFallbackRequest(t *testing.T) {
 			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
 				seenPow = req.Header.Get("x-ds-pow-response")
 				seenURL = req.URL.String()
+				if err := json.NewDecoder(req.Body).Decode(&seenPayload); err != nil {
+					t.Fatalf("decode continuation payload: %v", err)
+				}
 				body := io.NopCloser(strings.NewReader("data: {\"p\":\"response/content\",\"v\":\"continued\"}\n" + "data: [DONE]\n"))
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -48,19 +53,40 @@ func TestCallContinuePropagatesPowHeaderToFallbackRequest(t *testing.T) {
 		},
 	}
 
-	resp, err := client.callContinue(context.Background(), &auth.RequestAuth{
+	state := continueState{
+		sessionID:      "session-123",
+		originalPrompt: "[user]: 写一个长回答",
+		basePayload: map[string]any{
+			"chat_session_id":   "session-123",
+			"prompt":            "[user]: 写一个长回答",
+			"thinking_enabled":  false,
+			"parent_message_id": nil,
+		},
+	}
+	state.text.WriteString("第一段没有写完的回答")
+
+	resp, err := client.callContinuationCompletion(context.Background(), &auth.RequestAuth{
 		DeepSeekToken: "token",
 		AccountID:     "acct",
-	}, "session-123", 99, "pow-response-abc")
+	}, "pow-response-abc", &state)
 	if err != nil {
-		t.Fatalf("callContinue returned error: %v", err)
+		t.Fatalf("callContinuationCompletion returned error: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if seenPow != "pow-response-abc" {
 		t.Fatalf("continue request pow header=%q want=%q", seenPow, "pow-response-abc")
 	}
-	if seenURL != dsprotocol.DeepSeekContinueURL {
-		t.Fatalf("continue request url=%q want=%q", seenURL, dsprotocol.DeepSeekContinueURL)
+	if seenURL != dsprotocol.DeepSeekCompletionURL {
+		t.Fatalf("continue request url=%q want=%q", seenURL, dsprotocol.DeepSeekCompletionURL)
+	}
+	if _, ok := seenPayload["message_id"]; ok {
+		t.Fatalf("continuation payload must not use native continue message_id: %#v", seenPayload)
+	}
+	prompt, _ := seenPayload["prompt"].(string)
+	if !strings.Contains(prompt, "[assistant]: 第一段没有写完的回答") ||
+		!strings.Contains(prompt, "Resume from the very next character after the tail above.") ||
+		!strings.Contains(prompt, "Output only the missing continuation text.") {
+		t.Fatalf("continuation prompt was not cursor-style: %s", prompt)
 	}
 }
 
@@ -76,8 +102,8 @@ func TestCallCompletionAutoContinueThreadsPowHeaderForTruncatedText(t *testing.T
 	}, "\n") + "\n"
 
 	client := &Client{
-		stream: failingOrCompletionDoer{
-			completionResp: &http.Response{
+		stream: &sequenceCompletionDoer{
+			first: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     make(http.Header),
 				Body:       io.NopCloser(strings.NewReader(initialBody)),
@@ -115,11 +141,11 @@ func TestCallCompletionAutoContinueThreadsPowHeaderForTruncatedText(t *testing.T
 	if seenPow != "pow-response-xyz" {
 		t.Fatalf("threaded continue pow header=%q want=%q", seenPow, "pow-response-xyz")
 	}
-	if seenContinueURL != dsprotocol.DeepSeekContinueURL {
-		t.Fatalf("continue url=%q want=%q", seenContinueURL, dsprotocol.DeepSeekContinueURL)
+	if seenContinueURL != dsprotocol.DeepSeekCompletionURL {
+		t.Fatalf("continue url=%q want=%q", seenContinueURL, dsprotocol.DeepSeekCompletionURL)
 	}
-	if !bytes.Contains(out, []byte(`"v":"CONTENT_FILTER"`)) {
-		t.Fatalf("expected initial stream content in body, got=%s", string(out))
+	if bytes.Contains(out, []byte(`"v":"CONTENT_FILTER"`)) {
+		t.Fatalf("intermediate content_filter status should be deferred while continuing, got=%s", string(out))
 	}
 	if !bytes.Contains(out, []byte("自动续写补上的内容")) {
 		t.Fatalf("expected continuation content in body, got=%s", string(out))
@@ -139,8 +165,8 @@ func TestCallCompletionDoesNotAutoContinueCompleteWIPText(t *testing.T) {
 	}, "\n") + "\n"
 
 	client := &Client{
-		stream: failingOrCompletionDoer{
-			completionResp: &http.Response{
+		stream: &sequenceCompletionDoer{
+			first: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     make(http.Header),
 				Body:       io.NopCloser(strings.NewReader(initialBody)),
@@ -196,8 +222,8 @@ func TestCallCompletionAutoContinuesTruncatedFinishedText(t *testing.T) {
 	}, "\n") + "\n"
 
 	client := &Client{
-		stream: failingOrCompletionDoer{
-			completionResp: &http.Response{
+		stream: &sequenceCompletionDoer{
+			first: &http.Response{
 				StatusCode: http.StatusOK,
 				Header:     make(http.Header),
 				Body:       io.NopCloser(strings.NewReader(initialBody)),
@@ -253,6 +279,21 @@ type failingOrCompletionDoer struct {
 func (d failingOrCompletionDoer) Do(req *http.Request) (*http.Response, error) {
 	if strings.Contains(req.URL.Path, "/chat/completion") {
 		return d.completionResp, nil
+	}
+	return nil, errors.New("forced stream failure")
+}
+
+type sequenceCompletionDoer struct {
+	first *http.Response
+	calls int
+}
+
+func (d *sequenceCompletionDoer) Do(req *http.Request) (*http.Response, error) {
+	if strings.Contains(req.URL.Path, "/chat/completion") {
+		d.calls++
+		if d.calls == 1 {
+			return d.first, nil
+		}
 	}
 	return nil, errors.New("forced stream failure")
 }
