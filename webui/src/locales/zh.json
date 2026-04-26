@@ -224,7 +224,9 @@
             "flashSearch": "v4 Flash（带搜索）",
             "proSearch": "v4 Pro（带搜索）",
             "vision": "v4 Vision（默认开启思考）",
-            "visionSearch": "v4 Vision（带搜索）"
+            "visionSearch": "v4 Vision（带搜索）",
+            "generic": "兼容模型",
+            "noThinking": "强制关闭思考"
         },
         "missingApiKey": "请提供 API 密钥",
         "requestFailed": "请求失败",
@@ -234,6 +236,11 @@
         "config": "配置",
         "modelLabel": "模型",
         "modelPickerHint": "使用下拉列表选择模型，长列表会自动滚动。",
+        "loadingModels": "正在加载模型...",
+        "loadingModelsHint": "正在从 /v1/models 拉取可用模型列表。",
+        "noModels": "没有可用模型",
+        "noModelsHint": "/v1/models 当前没有返回任何可用模型，请先检查后端配置或接口状态。",
+        "noModelsMessagePlaceholder": "当前没有可用模型，暂时无法发起测试。",
         "streamMode": "流式模式",
         "accountSelector": "选择账号",
         "autoRandom": "🤖 自动 / 随机",

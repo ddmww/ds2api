@@ -125,23 +125,32 @@ flowchart LR
 | 模型类型 | 模型 ID | thinking | search |
 | --- | --- | --- | --- |
 | default | `deepseek-v4-flash` | 默认开启，可由请求参数控制 | ❌ |
+| default | `deepseek-v4-flash-nothinking` | 永久关闭，不受请求参数影响 | ❌ |
 | expert | `deepseek-v4-pro` | 默认开启，可由请求参数控制 | ❌ |
+| expert | `deepseek-v4-pro-nothinking` | 永久关闭，不受请求参数影响 | ❌ |
 | default | `deepseek-v4-flash-search` | 默认开启，可由请求参数控制 | ✅ |
+| default | `deepseek-v4-flash-search-nothinking` | 永久关闭，不受请求参数影响 | ✅ |
 | expert | `deepseek-v4-pro-search` | 默认开启，可由请求参数控制 | ✅ |
+| expert | `deepseek-v4-pro-search-nothinking` | 永久关闭，不受请求参数影响 | ✅ |
 | vision | `deepseek-v4-vision` | 默认开启，可由请求参数控制 | ❌ |
+| vision | `deepseek-v4-vision-nothinking` | 永久关闭，不受请求参数影响 | ❌ |
 | vision | `deepseek-v4-vision-search` | 默认开启，可由请求参数控制 | ✅ |
+| vision | `deepseek-v4-vision-search-nothinking` | 永久关闭，不受请求参数影响 | ✅ |
 
-除原生模型外，也支持常见 alias 输入（如 `gpt-4.1`、`gpt-5`、`gpt-5-codex`、`o3`、`claude-*`、`gemini-*` 等），但 `/v1/models` 返回的是规范化后的 DeepSeek 原生模型 ID。完整 alias 行为以 [API.md](API.md#模型-alias-解析策略) 和 `config.example.json` 为准。
+除原生模型外，也支持常见 alias 输入（如 `gpt-4.1`、`gpt-5`、`gpt-5-codex`、`o3`、`claude-*`、`gemini-*` 等），但 `/v1/models` 返回的是规范化后的 DeepSeek 原生模型 ID。若 alias 名本身追加 `-nothinking` 后缀，也会映射到对应的强制关思考模型。完整 alias 行为以 [API.md](API.md#模型-alias-解析策略) 和 `config.example.json` 为准。
 
 ### Claude 接口（`GET /anthropic/v1/models`）
 
 | 当前常用模型 | 默认映射 |
 | --- | --- |
 | `claude-sonnet-4-6` | `deepseek-v4-flash` |
+| `claude-sonnet-4-6-nothinking` | `deepseek-v4-flash-nothinking` |
 | `claude-haiku-4-5`（兼容 `claude-3-5-haiku-latest`） | `deepseek-v4-flash` |
+| `claude-haiku-4-5-nothinking` | `deepseek-v4-flash-nothinking` |
 | `claude-opus-4-6` | `deepseek-v4-pro` |
+| `claude-opus-4-6-nothinking` | `deepseek-v4-pro-nothinking` |
 
-可通过配置中的 `model_aliases` 覆盖映射关系。
+可通过配置中的 `model_aliases` 覆盖映射关系；若请求模型名带 `-nothinking`，会在最终映射结果上强制追加无思考语义。
 `/anthropic/v1/models` 除上述主别名外，还会返回 Claude 4.x snapshots、3.x 历史模型 ID 与常见 alias，便于旧客户端直接兼容。
 
 #### Claude Code 接入避坑（实测）
@@ -153,7 +162,7 @@ flowchart LR
 
 ### Gemini 接口
 
-Gemini 适配器将模型名通过 `model_aliases` 或内置规则映射到 DeepSeek 原生模型，支持 `generateContent` 和 `streamGenerateContent` 两种调用方式，并完整支持 Tool Calling（`functionDeclarations` → `functionCall` 输出）。
+Gemini 适配器将模型名通过 `model_aliases` 或内置规则映射到 DeepSeek 原生模型，支持 `generateContent` 和 `streamGenerateContent` 两种调用方式，并完整支持 Tool Calling（`functionDeclarations` → `functionCall` 输出）。若 Gemini 模型名带 `-nothinking` 后缀，例如 `gemini-2.5-pro-nothinking`，会映射到对应的强制关闭思考模型。
 
 ## 快速开始
 
@@ -284,7 +293,7 @@ go run ./cmd/ds2api
 - `history_split`：轮次拆分策略；默认关闭，开启后默认从第二轮开始将旧历史上传为 `HISTORY.txt`。
 - `current_input_file`：独立拆分策略；默认开启且阈值为 `0`，触发时将完整上下文合并上传为隐藏上下文文件，并跳过 `HISTORY.txt`。
 - `history_split` 与 `current_input_file` 互斥，最多启用一个；两者都关闭时请求直接透传。
-- `thinking_injection`：默认开启；在最新 user 消息末尾追加思考格式增强提示，提高工具调用前的思考结构稳定性；`prompt` 留空时使用内置默认提示词。
+- `thinking_injection`：默认开启；在最新 user 消息末尾追加思考增强提示词，提高高强度推理与工具调用前的思考稳定性；`prompt` 留空时使用内置默认提示词。
 
 环境变量完整列表见 [部署指南](docs/DEPLOY.md)，接口鉴权规则见 [API.md](API.md#鉴权规则)。
 

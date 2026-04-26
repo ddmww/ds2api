@@ -88,16 +88,14 @@ func TestBuildOpenAIFinalPrompt_VercelPreparePathKeepsFinalAnswerInstruction(t *
 	}
 }
 
-func TestBuildOpenAIFinalPromptWithThinkingAddsContinuationContract(t *testing.T) {
+func TestBuildOpenAIFinalPromptWithThinkingKeepsPromptUnchanged(t *testing.T) {
 	messages := []any{
 		map[string]any{"role": "user", "content": "继续回答上一个问题"},
 	}
 
-	finalPrompt, _ := buildOpenAIFinalPrompt(messages, nil, "", true)
-	if !strings.Contains(finalPrompt, "Continue the conversation from the full prior context") {
-		t.Fatalf("expected continuation contract in thinking prompt, got=%q", finalPrompt)
-	}
-	if !strings.Contains(finalPrompt, "final user-facing answer only in reasoning") {
-		t.Fatalf("expected visible-answer contract in thinking prompt, got=%q", finalPrompt)
+	finalPromptThinking, _ := buildOpenAIFinalPrompt(messages, nil, "", true)
+	finalPromptPlain, _ := buildOpenAIFinalPrompt(messages, nil, "", false)
+	if finalPromptThinking != finalPromptPlain {
+		t.Fatalf("expected thinking flag not to prepend continuation contract, thinking=%q plain=%q", finalPromptThinking, finalPromptPlain)
 	}
 }

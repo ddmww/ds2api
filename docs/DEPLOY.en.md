@@ -538,7 +538,7 @@ curl -s http://127.0.0.1:5001/readyz
 
 # 3. Model list
 curl -s http://127.0.0.1:5001/v1/models
-# Expected: {"object":"list","data":[...]}
+# Expected: {"object":"list","data":[...]} (including `*-nothinking` variants)
 
 # 4. Admin panel (if WebUI is built)
 curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/admin

@@ -3,12 +3,10 @@ package promptcompat
 import "strings"
 
 const (
-	ThinkingInjectionMarker        = "【思维链格式要求】"
-	DefaultThinkingInjectionPrompt = ThinkingInjectionMarker + "在你的思考过程（<think>标签内）中，请严格按照以下规则进行思考，不要遗漏：\n" +
-		"1. 分析阶段：分析用户需求是什么。\n" +
-		"2. 构思阶段：构思下一步动作，我要干什么。\n" +
-		"3. 工具调用阶段：为了满足用户需求，我需要调用什么工具；如果不需要工具，明确说明不需要调用工具。\n" +
-		"4. 回顾格式：完整复述一遍 System 要求的 XML 工具调用格式要求，回顾错误示例和正确示例，说明我要如何正确调用工具。"
+	ThinkingInjectionMarker        = "Reasoning Effort: Absolute maximum with no shortcuts permitted."
+	DefaultThinkingInjectionPrompt = ThinkingInjectionMarker + "\n" +
+		"You MUST be very thorough in your thinking and comprehensively decompose the problem to resolve the root cause, rigorously stress-testing your logic against all potential paths, edge cases, and adversarial scenarios.\n" +
+		"Explicitly write out your entire deliberation process, documenting every intermediate step, considered alternative, and rejected hypothesis to ensure absolutely no assumption is left unchecked."
 )
 
 func AppendThinkingInjectionToLatestUser(messages []any) ([]any, bool) {
