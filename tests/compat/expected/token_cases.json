@@ -1,9 +1,9 @@
 {
   "cases": [
-    {"name": "ascii_short", "tokens": 1},
-    {"name": "whitespace_only", "tokens": 1},
+    {"name": "ascii_short", "tokens": 2},
+    {"name": "whitespace_only", "tokens": 2},
     {"name": "newline_only", "tokens": 1},
-    {"name": "cjk", "tokens": 3},
-    {"name": "mixed", "tokens": 4}
+    {"name": "cjk", "tokens": 4},
+    {"name": "mixed", "tokens": 5}
   ]
 }

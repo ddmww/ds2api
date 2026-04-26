@@ -2,27 +2,46 @@ package openai
 
 import "ds2api/internal/util"
 
-func BuildChatUsage(finalPrompt, finalThinking, finalText string) map[string]any {
-	promptTokens := util.EstimateTokens(finalPrompt)
-	reasoningTokens := util.EstimateTokens(finalThinking)
-	completionTokens := util.EstimateTokens(finalText)
+func BuildChatUsage(model, finalPrompt, finalThinking, finalText string) map[string]any {
+	promptTokens := util.EstimateTokensByModel(model, finalPrompt)
+	reasoningTokens := util.EstimateTokensByModel(model, finalThinking)
+	completionTokens := util.EstimateTokensByModel(model, finalText)
+	totalCompletionTokens := reasoningTokens + completionTokens
 	return map[string]any{
 		"prompt_tokens":     promptTokens,
-		"completion_tokens": reasoningTokens + completionTokens,
-		"total_tokens":      promptTokens + reasoningTokens + completionTokens,
+		"completion_tokens": totalCompletionTokens,
+		"total_tokens":      promptTokens + totalCompletionTokens,
+		"prompt_tokens_details": map[string]any{
+			"cached_tokens": 0,
+			"text_tokens":   promptTokens,
+			"audio_tokens":  0,
+			"image_tokens":  0,
+		},
 		"completion_tokens_details": map[string]any{
+			"text_tokens":      maxInt(totalCompletionTokens-reasoningTokens, 0),
+			"audio_tokens":     0,
 			"reasoning_tokens": reasoningTokens,
 		},
 	}
 }
 
-func BuildResponsesUsage(finalPrompt, finalThinking, finalText string) map[string]any {
-	promptTokens := util.EstimateTokens(finalPrompt)
-	reasoningTokens := util.EstimateTokens(finalThinking)
-	completionTokens := util.EstimateTokens(finalText)
+func BuildResponsesUsage(model, finalPrompt, finalThinking, finalText string) map[string]any {
+	promptTokens := util.EstimateTokensByModel(model, finalPrompt)
+	reasoningTokens := util.EstimateTokensByModel(model, finalThinking)
+	completionTokens := util.EstimateTokensByModel(model, finalText)
 	return map[string]any{
 		"input_tokens":  promptTokens,
 		"output_tokens": reasoningTokens + completionTokens,
 		"total_tokens":  promptTokens + reasoningTokens + completionTokens,
+		"output_tokens_details": map[string]any{
+			"reasoning_tokens": reasoningTokens,
+		},
 	}
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

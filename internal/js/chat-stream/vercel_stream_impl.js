@@ -191,7 +191,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
         created,
         model,
         choices: [{ delta: {}, index: 0, finish_reason: reason }],
-        usage: buildUsage(finalPrompt, thinkingText, outputText),
+        usage: buildUsage(finalPrompt, thinkingText, outputText, 0, 0, model),
       });
       if (!res.writableEnded && !res.destroyed) {
         res.write('data: [DONE]\n\n');

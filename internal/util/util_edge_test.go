@@ -19,15 +19,15 @@ func TestEstimateTokensEmpty(t *testing.T) {
 
 func TestEstimateTokensShortASCII(t *testing.T) {
 	got := EstimateTokens("ab")
-	if got != 1 {
-		t.Fatalf("expected 1 for 2 ascii chars, got %d", got)
+	if got != 2 {
+		t.Fatalf("expected 2 for short ascii text with grok-style estimator, got %d", got)
 	}
 }
 
 func TestEstimateTokensLongASCII(t *testing.T) {
 	got := EstimateTokens(strings.Repeat("x", 100))
-	if got != 25 {
-		t.Fatalf("expected 25 for 100 ascii chars, got %d", got)
+	if got != 2 {
+		t.Fatalf("expected 2 for one long ascii word with grok-style estimator, got %d", got)
 	}
 }
 
@@ -40,15 +40,15 @@ func TestEstimateTokensChinese(t *testing.T) {
 
 func TestEstimateTokensMixed(t *testing.T) {
 	got := EstimateTokens("Hello 你好世界")
-	if got < 2 {
-		t.Fatalf("expected at least 2 tokens for mixed text, got %d", got)
+	if got != 5 {
+		t.Fatalf("expected 5 for mixed text with grok-style estimator, got %d", got)
 	}
 }
 
 func TestEstimateTokensSingleByte(t *testing.T) {
 	got := EstimateTokens("x")
-	if got != 1 {
-		t.Fatalf("expected 1 for single char (minimum), got %d", got)
+	if got != 2 {
+		t.Fatalf("expected 2 for single ascii word with grok-style estimator, got %d", got)
 	}
 }
 
@@ -56,6 +56,16 @@ func TestEstimateTokensSingleChinese(t *testing.T) {
 	got := EstimateTokens("你")
 	if got != 1 {
 		t.Fatalf("expected 1 for single Chinese char, got %d", got)
+	}
+}
+
+func TestEstimateTokensByModelProviderDifference(t *testing.T) {
+	text := "hello 123 你好 ∑ https://example.com/a?b=1 😀\nnext"
+	openaiTokens := EstimateTokensByModel("gpt-4.1-mini", text)
+	claudeTokens := EstimateTokensByModel("claude-sonnet-4-6", text)
+	geminiTokens := EstimateTokensByModel("gemini-2.5-pro", text)
+	if openaiTokens == claudeTokens && claudeTokens == geminiTokens {
+		t.Fatalf("expected model-aware estimator to vary by provider, got openai=%d claude=%d gemini=%d", openaiTokens, claudeTokens, geminiTokens)
 	}
 }
 

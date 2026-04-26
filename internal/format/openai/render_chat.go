@@ -25,7 +25,7 @@ func BuildChatCompletion(completionID, model, finalPrompt, finalThinking, finalT
 		"created": time.Now().Unix(),
 		"model":   model,
 		"choices": []map[string]any{{"index": 0, "message": messageObj, "finish_reason": finishReason}},
-		"usage":   BuildChatUsage(finalPrompt, finalThinking, finalText),
+		"usage":   BuildChatUsage(model, finalPrompt, finalThinking, finalText),
 	}
 }
 

@@ -22,6 +22,7 @@ type chatHistorySession struct {
 	entryID     string
 	startedAt   time.Time
 	lastPersist time.Time
+	model       string
 	finalPrompt string
 	startParams chathistory.StartParams
 	disabled    bool
@@ -62,6 +63,7 @@ func startChatHistory(store *chathistory.Store, r *http.Request, a *auth.Request
 		entryID:     entry.ID,
 		startedAt:   time.Now(),
 		lastPersist: time.Now(),
+		model:       strings.TrimSpace(stdReq.ResponseModel),
 		finalPrompt: stdReq.FinalPrompt,
 		startParams: startParams,
 	}
@@ -183,7 +185,7 @@ func (s *chatHistorySession) stopped(thinking, content, finishReason string) {
 		StatusCode:       http.StatusOK,
 		ElapsedMs:        time.Since(s.startedAt).Milliseconds(),
 		FinishReason:     finishReason,
-		Usage:            openaifmt.BuildChatUsage(s.finalPrompt, thinking, content),
+		Usage:            openaifmt.BuildChatUsage(s.model, s.finalPrompt, thinking, content),
 		Completed:        true,
 	})
 }

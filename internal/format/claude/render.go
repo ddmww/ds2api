@@ -43,8 +43,8 @@ func BuildMessageResponse(messageID, model string, normalizedMessages []any, fin
 		"stop_reason":   stopReason,
 		"stop_sequence": nil,
 		"usage": map[string]any{
-			"input_tokens":  util.EstimateTokens(fmt.Sprintf("%v", normalizedMessages)),
-			"output_tokens": util.EstimateTokens(finalThinking) + util.EstimateTokens(finalText),
+			"input_tokens":  util.EstimateAnyTokensByModel(model, normalizedMessages),
+			"output_tokens": util.EstimateTokensByModel(model, finalThinking) + util.EstimateTokensByModel(model, finalText),
 		},
 	}
 }
