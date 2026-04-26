@@ -66,6 +66,34 @@ func TestGetSettingsIncludesHistorySplitDefaults(t *testing.T) {
 	}
 }
 
+func TestGetSettingsIncludesVisionConfig(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"keys":["k1"],
+		"vision":{
+			"enabled":true,
+			"base_url":"https://example.com/v1/chat/completions",
+			"api_key":"sk-test",
+			"model":"gpt-4.1-mini",
+			"prompt":"describe images"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodGet, "/admin/settings", nil)
+	rec := httptest.NewRecorder()
+	h.getSettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	vision, _ := body["vision"].(map[string]any)
+	if got, _ := vision["enabled"].(bool); !got {
+		t.Fatalf("expected vision.enabled=true, body=%v", body)
+	}
+	if got := vision["base_url"]; got != "https://example.com/v1/chat/completions" {
+		t.Fatalf("vision.base_url=%q want expected value", got)
+	}
+}
+
 func TestUpdateSettingsValidation(t *testing.T) {
 	h := newAdminTestHandler(t, `{"keys":["k1"]}`)
 	payload := map[string]any{
@@ -194,6 +222,33 @@ func TestUpdateSettingsHistorySplit(t *testing.T) {
 	}
 	if snap.HistorySplit.TriggerAfterTurns == nil || *snap.HistorySplit.TriggerAfterTurns != 3 {
 		t.Fatalf("expected history_split.trigger_after_turns=3, got %#v", snap.HistorySplit.TriggerAfterTurns)
+	}
+}
+
+func TestUpdateSettingsVision(t *testing.T) {
+	h := newAdminTestHandler(t, `{"keys":["k1"]}`)
+	payload := map[string]any{
+		"vision": map[string]any{
+			"enabled":  true,
+			"base_url": "https://example.com/v1/chat/completions",
+			"api_key":  "sk-test",
+			"model":    "gpt-4.1-mini",
+			"prompt":   "describe images",
+		},
+	}
+	b, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPut, "/admin/settings", bytes.NewReader(b))
+	rec := httptest.NewRecorder()
+	h.updateSettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	snap := h.Store.Snapshot()
+	if !snap.Vision.Enabled {
+		t.Fatalf("expected vision.enabled=true, got %#v", snap.Vision)
+	}
+	if snap.Vision.Model != "gpt-4.1-mini" {
+		t.Fatalf("expected vision.model updated, got %#v", snap.Vision)
 	}
 }
 

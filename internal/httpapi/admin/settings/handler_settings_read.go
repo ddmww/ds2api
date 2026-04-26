@@ -29,6 +29,7 @@ func (h *Handler) getSettings(w http.ResponseWriter, _ *http.Request) {
 		"compat":                   snap.Compat,
 		"responses":                snap.Responses,
 		"embeddings":               snap.Embeddings,
+		"vision":                   snap.Vision,
 		"upstream_blocker":         snap.UpstreamBlocker,
 		"truncation_auto_continue": snap.Truncation,
 		"auto_delete":              snap.AutoDelete,

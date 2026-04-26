@@ -16,6 +16,13 @@ const DEFAULT_FORM = {
     compat: { strip_reference_markers: true },
     responses: { store_ttl_seconds: 900 },
     embeddings: { provider: '' },
+    vision: {
+        enabled: false,
+        base_url: '',
+        api_key: '',
+        model: '',
+        prompt: '',
+    },
     upstream_blocker: {
         enabled: false,
         case_sensitive: false,
@@ -79,6 +86,13 @@ function fromServerForm(data) {
         embeddings: {
             provider: data.embeddings?.provider || '',
         },
+        vision: {
+            enabled: Boolean(data.vision?.enabled),
+            base_url: data.vision?.base_url || '',
+            api_key: data.vision?.api_key || '',
+            model: data.vision?.model || '',
+            prompt: data.vision?.prompt || '',
+        },
         upstream_blocker: {
             enabled: Boolean(data.upstream_blocker?.enabled),
             case_sensitive: Boolean(data.upstream_blocker?.case_sensitive),
@@ -119,6 +133,13 @@ function toServerPayload(form) {
         },
         responses: { store_ttl_seconds: Number(form.responses.store_ttl_seconds) },
         embeddings: { provider: String(form.embeddings.provider || '').trim() },
+        vision: {
+            enabled: Boolean(form.vision?.enabled),
+            base_url: String(form.vision?.base_url || '').trim(),
+            api_key: String(form.vision?.api_key || '').trim(),
+            model: String(form.vision?.model || '').trim(),
+            prompt: String(form.vision?.prompt || '').trim(),
+        },
         upstream_blocker: {
             enabled: Boolean(form.upstream_blocker?.enabled),
             case_sensitive: Boolean(form.upstream_blocker?.case_sensitive),

@@ -32,6 +32,89 @@ export default function BehaviorSection({ t, form, setForm }) {
             <div className="border-t border-border pt-4 space-y-4">
                 <div className="flex items-center justify-between gap-4">
                     <div>
+                        <h4 className="text-sm font-medium">{t('settings.visionTitle')}</h4>
+                        <p className="text-xs text-muted-foreground mt-1">{t('settings.visionDesc')}</p>
+                    </div>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(form.vision?.enabled)}
+                        onClick={() => setForm((prev) => ({
+                            ...prev,
+                            vision: {
+                                ...prev.vision,
+                                enabled: !Boolean(prev.vision?.enabled),
+                            },
+                        }))}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            form.vision?.enabled ? 'bg-primary' : 'bg-muted'
+                        }`}
+                    >
+                        <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                form.vision?.enabled ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                        />
+                    </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="text-sm space-y-2">
+                        <span className="text-muted-foreground">{t('settings.visionBaseUrl')}</span>
+                        <input
+                            type="text"
+                            value={form.vision?.base_url || ''}
+                            onChange={(e) => setForm((prev) => ({
+                                ...prev,
+                                vision: { ...prev.vision, base_url: e.target.value },
+                            }))}
+                            placeholder="https://api.openai.com/v1/chat/completions"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2"
+                        />
+                    </label>
+                    <label className="text-sm space-y-2">
+                        <span className="text-muted-foreground">{t('settings.visionModel')}</span>
+                        <input
+                            type="text"
+                            value={form.vision?.model || ''}
+                            onChange={(e) => setForm((prev) => ({
+                                ...prev,
+                                vision: { ...prev.vision, model: e.target.value },
+                            }))}
+                            placeholder="gpt-4.1-mini"
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2"
+                        />
+                    </label>
+                    <label className="text-sm space-y-2 md:col-span-2">
+                        <span className="text-muted-foreground">{t('settings.visionApiKey')}</span>
+                        <input
+                            type="password"
+                            value={form.vision?.api_key || ''}
+                            onChange={(e) => setForm((prev) => ({
+                                ...prev,
+                                vision: { ...prev.vision, api_key: e.target.value },
+                            }))}
+                            placeholder="sk-..."
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2"
+                        />
+                    </label>
+                </div>
+                <label className="text-sm space-y-2 block">
+                    <span className="text-muted-foreground">{t('settings.visionPrompt')}</span>
+                    <textarea
+                        rows={4}
+                        value={form.vision?.prompt || ''}
+                        onChange={(e) => setForm((prev) => ({
+                            ...prev,
+                            vision: { ...prev.vision, prompt: e.target.value },
+                        }))}
+                        placeholder="Please describe the attached images in detail. If they contain code, UI elements, or error messages, explicitly write them out."
+                        className="w-full bg-background border border-border rounded-lg px-3 py-2"
+                    />
+                </label>
+            </div>
+            <div className="border-t border-border pt-4 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                    <div>
                         <h4 className="text-sm font-medium">{t('settings.truncationAutoContinueTitle')}</h4>
                         <p className="text-xs text-muted-foreground mt-1">{t('settings.truncationAutoContinueDesc')}</p>
                     </div>
