@@ -13,6 +13,8 @@ import (
 
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
+	"ds2api/internal/sse"
+	"ds2api/internal/truncation"
 )
 
 const defaultAutoContinueLimit = 8
@@ -24,6 +26,13 @@ type continueState struct {
 	responseMessageID int
 	lastStatus        string
 	finished          bool
+	thinkingEnabled   bool
+	currentType       string
+	text              strings.Builder
+	thinking          strings.Builder
+	truncationEnabled bool
+	plainTextContinue bool
+	minChars          int
 }
 
 // wrapCompletionWithAutoContinue wraps the completion response body so that
@@ -40,11 +49,27 @@ func (c *Client) wrapCompletionWithAutoContinue(ctx context.Context, a *auth.Req
 	if sessionID == "" {
 		return resp
 	}
+	thinkingEnabled, _ := payload["thinking_enabled"].(bool)
+	truncationEnabled, plainTextContinue, truncationMaxRounds, truncationMinChars := c.truncationAutoContinueSettings()
 	config.Logger.Debug("[auto_continue] wrapping completion response", "session_id", sessionID)
-	resp.Body = newAutoContinueBody(ctx, resp.Body, sessionID, defaultAutoContinueLimit, func(ctx context.Context, sessionID string, responseMessageID int) (*http.Response, error) {
+	resp.Body = newAutoContinueBody(ctx, resp.Body, continueState{
+		sessionID:         sessionID,
+		thinkingEnabled:   thinkingEnabled,
+		currentType:       initialSSEPartType(thinkingEnabled),
+		truncationEnabled: truncationEnabled,
+		plainTextContinue: plainTextContinue,
+		minChars:          truncationMinChars,
+	}, defaultAutoContinueLimit, truncationMaxRounds, func(ctx context.Context, sessionID string, responseMessageID int) (*http.Response, error) {
 		return c.callContinue(ctx, a, sessionID, responseMessageID, powResp)
 	})
 	return resp
+}
+
+func (c *Client) truncationAutoContinueSettings() (enabled bool, plainText bool, maxRounds int, minChars int) {
+	if c == nil || c.Store == nil {
+		return true, true, 2, 120
+	}
+	return c.Store.TruncationAutoContinueSettings()
 }
 
 // callContinue sends a continue request to DeepSeek to resume generation.
@@ -78,25 +103,29 @@ func (c *Client) callContinue(ctx context.Context, a *auth.RequestAuth, sessionI
 
 // newAutoContinueBody returns a new ReadCloser that transparently pumps
 // continuation rounds via an io.Pipe.
-func newAutoContinueBody(ctx context.Context, initial io.ReadCloser, sessionID string, maxRounds int, openContinue continueOpenFunc) io.ReadCloser {
-	if initial == nil || strings.TrimSpace(sessionID) == "" || openContinue == nil {
+func newAutoContinueBody(ctx context.Context, initial io.ReadCloser, state continueState, maxRounds, truncationMaxRounds int, openContinue continueOpenFunc) io.ReadCloser {
+	if initial == nil || strings.TrimSpace(state.sessionID) == "" || openContinue == nil {
 		return initial
 	}
 	if maxRounds <= 0 {
 		maxRounds = defaultAutoContinueLimit
 	}
+	if truncationMaxRounds < 0 {
+		truncationMaxRounds = 0
+	}
 	pr, pw := io.Pipe()
-	go pumpAutoContinue(ctx, pw, initial, continueState{sessionID: sessionID}, maxRounds, openContinue)
+	go pumpAutoContinue(ctx, pw, initial, state, maxRounds, truncationMaxRounds, openContinue)
 	return pr
 }
 
 // pumpAutoContinue is the goroutine that drives the auto-continue loop.
 // It reads the initial SSE body, checks whether a continue is required,
 // and if so opens a new continue stream and splices it onto the pipe writer.
-func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadCloser, state continueState, maxRounds int, openContinue continueOpenFunc) {
+func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadCloser, state continueState, maxRounds, truncationMaxRounds int, openContinue continueOpenFunc) {
 	defer func() { _ = pw.Close() }()
 	current := initial
 	rounds := 0
+	truncationRounds := 0
 	for {
 		hadDone, err := streamBodyWithContinueState(ctx, pw, current, &state)
 		_ = current.Close()
@@ -104,18 +133,32 @@ func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadClo
 			_ = pw.CloseWithError(err)
 			return
 		}
-		if state.shouldContinue() && rounds < maxRounds {
+		shouldContinue, reason := state.shouldContinue()
+		roundLimit := maxRounds
+		if reason == "truncated" {
+			roundLimit = truncationMaxRounds
+		}
+		if shouldContinue && rounds < roundLimit {
 			rounds++
-			config.Logger.Info("[auto_continue] continuing", "round", rounds, "session_id", state.sessionID, "message_id", state.responseMessageID, "status", state.lastStatus)
+			if reason == "truncated" {
+				truncationRounds++
+			}
+			config.Logger.Info("[auto_continue] continuing", "round", rounds, "session_id", state.sessionID, "message_id", state.responseMessageID, "status", state.lastStatus, "reason", reason)
 			nextResp, err := openContinue(ctx, state.sessionID, state.responseMessageID)
 			if err != nil {
 				config.Logger.Warn("[auto_continue] continue request failed", "round", rounds, "error", err)
+				if reason == "truncated" {
+					break
+				}
 				_ = pw.CloseWithError(err)
 				return
 			}
 			current = nextResp.Body
 			state.prepareForNextRound()
 			continue
+		}
+		if shouldContinue && reason == "truncated" && truncationRounds >= truncationMaxRounds {
+			config.Logger.Warn("[auto_continue] truncation continue limit reached", "session_id", state.sessionID, "message_id", state.responseMessageID, "rounds", truncationRounds)
 		}
 		// Emit the final [DONE] sentinel if the upstream had one.
 		if hadDone {
@@ -124,6 +167,9 @@ func pumpAutoContinue(ctx context.Context, pw *io.PipeWriter, initial io.ReadClo
 			}
 		}
 		return
+	}
+	if _, err := io.Copy(pw, bytes.NewBufferString("data: [DONE]\n")); err != nil {
+		_ = pw.CloseWithError(err)
 	}
 }
 
@@ -154,11 +200,34 @@ func streamBodyWithContinueState(ctx context.Context, pw *io.PipeWriter, body io
 			}
 			state.observe(data)
 		}
+		state.observeContentLine(line)
 		if _, err := io.Copy(pw, bytes.NewReader(append(line, '\n'))); err != nil {
 			return hadDone, err
 		}
 	}
 	return hadDone, scanner.Err()
+}
+
+func (s *continueState) observeContentLine(line []byte) {
+	if s == nil {
+		return
+	}
+	if strings.TrimSpace(s.currentType) == "" {
+		s.currentType = initialSSEPartType(s.thinkingEnabled)
+	}
+	result := sse.ParseDeepSeekContentLine(line, s.thinkingEnabled, s.currentType)
+	s.currentType = result.NextType
+	if !result.Parsed || len(result.Parts) == 0 {
+		return
+	}
+	for _, part := range result.Parts {
+		switch part.Type {
+		case "thinking":
+			s.thinking.WriteString(truncation.DeduplicateContinuation(s.thinking.String(), part.Text))
+		default:
+			s.text.WriteString(truncation.DeduplicateContinuation(s.text.String(), part.Text))
+		}
+	}
 }
 
 // observe extracts continue-relevant signals from an SSE JSON chunk.
@@ -216,19 +285,24 @@ func (s *continueState) observe(data string) {
 }
 
 // shouldContinue returns true when the upstream indicates the response is
-// not yet finished and we have enough information to issue a continue request.
-func (s *continueState) shouldContinue() bool {
+// not yet finished, or when the final visible output looks hard-truncated.
+func (s *continueState) shouldContinue() (bool, string) {
 	if s == nil {
-		return false
+		return false, ""
 	}
 	if s.finished || s.responseMessageID <= 0 || strings.TrimSpace(s.sessionID) == "" {
-		return false
+		if s.finished && s.truncationEnabled && s.responseMessageID > 0 && strings.TrimSpace(s.sessionID) != "" {
+			if truncation.ShouldContinue(s.text.String(), s.plainTextContinue, s.minChars) {
+				return true, "truncated"
+			}
+		}
+		return false, ""
 	}
 	switch strings.ToUpper(strings.TrimSpace(s.lastStatus)) {
 	case "WIP", "INCOMPLETE", "AUTO_CONTINUE":
-		return true
+		return true, strings.ToLower(strings.TrimSpace(s.lastStatus))
 	default:
-		return false
+		return false, ""
 	}
 }
 
@@ -240,4 +314,12 @@ func (s *continueState) prepareForNextRound() {
 	}
 	s.finished = false
 	s.lastStatus = ""
+	s.currentType = initialSSEPartType(s.thinkingEnabled)
+}
+
+func initialSSEPartType(thinkingEnabled bool) string {
+	if thinkingEnabled {
+		return "thinking"
+	}
+	return "text"
 }

@@ -67,6 +67,12 @@
     ],
     "message": "上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。"
   },
+  "truncation_auto_continue": {
+    "enabled": true,
+    "plain_text": true,
+    "max_rounds": 2,
+    "min_chars": 120
+  },
   "admin": {
     "jwt_expire_hours": 24
   },

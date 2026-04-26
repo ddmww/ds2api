@@ -24,6 +24,9 @@ func ValidateConfig(c Config) error {
 	if err := ValidateUpstreamBlockerConfig(c.UpstreamBlocker); err != nil {
 		return err
 	}
+	if err := ValidateTruncationConfig(c.Truncation); err != nil {
+		return err
+	}
 	if err := ValidateAutoDeleteConfig(c.AutoDelete); err != nil {
 		return err
 	}
@@ -135,6 +138,13 @@ func ValidateUpstreamBlockerConfig(blocker UpstreamBlockerConfig) error {
 		return fmt.Errorf("upstream_blocker.keywords cannot be empty when upstream_blocker.enabled is true")
 	}
 	return nil
+}
+
+func ValidateTruncationConfig(truncation TruncationConfig) error {
+	if err := ValidateIntRange("truncation_auto_continue.max_rounds", truncation.MaxRounds, 1, 8, false); err != nil {
+		return err
+	}
+	return ValidateIntRange("truncation_auto_continue.min_chars", truncation.MinChars, 50, 10000, false)
 }
 
 func ValidateAutoDeleteConfig(autoDelete AutoDeleteConfig) error {

@@ -47,6 +47,9 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if c.UpstreamBlocker.Enabled || c.UpstreamBlocker.CaseSensitive || len(c.UpstreamBlocker.Keywords) > 0 || strings.TrimSpace(c.UpstreamBlocker.Message) != "" {
 		m["upstream_blocker"] = c.UpstreamBlocker
 	}
+	if c.Truncation.Enabled != nil || c.Truncation.PlainText != nil || c.Truncation.MaxRounds > 0 || c.Truncation.MinChars > 0 {
+		m["truncation_auto_continue"] = c.Truncation
+	}
 	m["auto_delete"] = c.AutoDelete
 	if c.HistorySplit.Enabled != nil || c.HistorySplit.TriggerAfterTurns != nil {
 		m["history_split"] = c.HistorySplit
@@ -117,6 +120,10 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 			if err := json.Unmarshal(v, &c.UpstreamBlocker); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
 			}
+		case "truncation_auto_continue":
+			if err := json.Unmarshal(v, &c.Truncation); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
 		case "auto_delete":
 			if err := json.Unmarshal(v, &c.AutoDelete); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
@@ -164,6 +171,12 @@ func (c Config) Clone() Config {
 			CaseSensitive: c.UpstreamBlocker.CaseSensitive,
 			Keywords:      slices.Clone(c.UpstreamBlocker.Keywords),
 			Message:       c.UpstreamBlocker.Message,
+		},
+		Truncation: TruncationConfig{
+			Enabled:   cloneBoolPtr(c.Truncation.Enabled),
+			PlainText: cloneBoolPtr(c.Truncation.PlainText),
+			MaxRounds: c.Truncation.MaxRounds,
+			MinChars:  c.Truncation.MinChars,
 		},
 		AutoDelete: c.AutoDelete,
 		HistorySplit: HistorySplitConfig{

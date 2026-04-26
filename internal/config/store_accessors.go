@@ -73,6 +73,28 @@ func (s *Store) UpstreamBlockerConfig() UpstreamBlockerConfig {
 	}
 }
 
+func (s *Store) TruncationAutoContinueSettings() (enabled bool, plainText bool, maxRounds int, minChars int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	enabled = true
+	if s.cfg.Truncation.Enabled != nil {
+		enabled = *s.cfg.Truncation.Enabled
+	}
+	plainText = true
+	if s.cfg.Truncation.PlainText != nil {
+		plainText = *s.cfg.Truncation.PlainText
+	}
+	maxRounds = s.cfg.Truncation.MaxRounds
+	if maxRounds <= 0 {
+		maxRounds = 2
+	}
+	minChars = s.cfg.Truncation.MinChars
+	if minChars <= 0 {
+		minChars = 120
+	}
+	return enabled, plainText, maxRounds, minChars
+}
+
 func (s *Store) AutoDeleteMode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

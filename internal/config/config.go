@@ -19,6 +19,7 @@ type Config struct {
 	Responses        ResponsesConfig       `json:"responses,omitempty"`
 	Embeddings       EmbeddingsConfig      `json:"embeddings,omitempty"`
 	UpstreamBlocker  UpstreamBlockerConfig `json:"upstream_blocker,omitempty"`
+	Truncation       TruncationConfig      `json:"truncation_auto_continue,omitempty"`
 	AutoDelete       AutoDeleteConfig      `json:"auto_delete"`
 	HistorySplit     HistorySplitConfig    `json:"history_split"`
 	VercelSyncHash   string                `json:"_vercel_sync_hash,omitempty"`
@@ -181,6 +182,13 @@ type UpstreamBlockerConfig struct {
 	CaseSensitive bool     `json:"case_sensitive,omitempty"`
 	Keywords      []string `json:"keywords,omitempty"`
 	Message       string   `json:"message,omitempty"`
+}
+
+type TruncationConfig struct {
+	Enabled   *bool `json:"enabled,omitempty"`
+	PlainText *bool `json:"plain_text,omitempty"`
+	MaxRounds int   `json:"max_rounds,omitempty"`
+	MinChars  int   `json:"min_chars,omitempty"`
 }
 
 type AutoDeleteConfig struct {

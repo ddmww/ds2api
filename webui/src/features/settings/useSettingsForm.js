@@ -22,6 +22,12 @@ const DEFAULT_FORM = {
         keywords_text: '',
         message: '上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。',
     },
+    truncation_auto_continue: {
+        enabled: true,
+        plain_text: true,
+        max_rounds: 2,
+        min_chars: 120,
+    },
     auto_delete: { mode: 'none' },
     history_split: { enabled: true, trigger_after_turns: 1 },
     model_aliases_text: '{}',
@@ -81,6 +87,12 @@ function fromServerForm(data) {
                 : String(data.upstream_blocker?.keywords || ''),
             message: data.upstream_blocker?.message || '上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。',
         },
+        truncation_auto_continue: {
+            enabled: data.truncation_auto_continue?.enabled ?? true,
+            plain_text: data.truncation_auto_continue?.plain_text ?? true,
+            max_rounds: Number(data.truncation_auto_continue?.max_rounds || 2),
+            min_chars: Number(data.truncation_auto_continue?.min_chars || 120),
+        },
         auto_delete: {
             mode: normalizeAutoDeleteMode(data.auto_delete),
         },
@@ -114,6 +126,12 @@ function toServerPayload(form) {
                 .map((item) => item.trim())
                 .filter(Boolean),
             message: String(form.upstream_blocker?.message || '').trim(),
+        },
+        truncation_auto_continue: {
+            enabled: Boolean(form.truncation_auto_continue?.enabled ?? true),
+            plain_text: Boolean(form.truncation_auto_continue?.plain_text ?? true),
+            max_rounds: Number(form.truncation_auto_continue?.max_rounds || 2),
+            min_chars: Number(form.truncation_auto_continue?.min_chars || 120),
         },
         auto_delete: { mode: normalizeAutoDeleteMode(form.auto_delete) },
         history_split: {

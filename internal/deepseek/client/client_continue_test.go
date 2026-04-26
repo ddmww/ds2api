@@ -124,6 +124,67 @@ func TestCallCompletionAutoContinueThreadsPowHeader(t *testing.T) {
 	}
 }
 
+func TestCallCompletionAutoContinuesTruncatedFinishedText(t *testing.T) {
+	var continueCalls int
+
+	initialBody := strings.Join([]string{
+		`data: {"response_message_id":321}`,
+		`data: {"p":"response/content","v":"这是一段很长的回答，用来模拟上游把最终输出截断。它已经超过了最小长度，而且最后一句明显没有说完。为了触发启发式检测，这里继续堆叠足够长的上下文，让文本长度超过默认阈值，同时结尾仍然停在一个没有结束标点的普通词语上，表示模型原本应该继续解释这个尚未完成的概念"}`,
+		`data: {"p":"response/status","v":"FINISHED"}`,
+		`data: [DONE]`,
+	}, "\n") + "\n"
+
+	client := &Client{
+		stream: failingOrCompletionDoer{
+			completionResp: &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(initialBody)),
+			},
+		},
+		fallbackS: &http.Client{
+			Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+				continueCalls++
+				body := io.NopCloser(strings.NewReader(
+					"data: {\"response_message_id\":322}\n" +
+						"data: {\"p\":\"response/content\",\"v\":\"，这里是自动续写补上的内容。\"}\n" +
+						"data: {\"p\":\"response/status\",\"v\":\"FINISHED\"}\n" +
+						"data: [DONE]\n"))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     make(http.Header),
+					Body:       body,
+					Request:    req,
+				}, nil
+			}),
+		},
+	}
+
+	resp, err := client.CallCompletion(context.Background(), &auth.RequestAuth{
+		DeepSeekToken: "token",
+		AccountID:     "acct",
+	}, map[string]any{
+		"chat_session_id": "session-123",
+	}, "pow-response-xyz", 1)
+	if err != nil {
+		t.Fatalf("CallCompletion returned error: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	out, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read auto-continued body failed: %v", err)
+	}
+	if continueCalls != 1 {
+		t.Fatalf("expected one truncation continue call, got %d", continueCalls)
+	}
+	if !bytes.Contains(out, []byte("自动续写补上的内容")) {
+		t.Fatalf("expected continuation content in body, got=%s", string(out))
+	}
+	if bytes.Count(out, []byte("data: [DONE]")) != 1 {
+		t.Fatalf("expected one final DONE sentinel, got=%s", string(out))
+	}
+}
+
 type failingOrCompletionDoer struct {
 	completionResp *http.Response
 }
