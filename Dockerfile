@@ -1,4 +1,4 @@
-FROM node:24 AS webui-builder
+FROM --platform=$BUILDPLATFORM node:24 AS webui-builder
 
 WORKDIR /app/webui
 COPY webui/package.json webui/package-lock.json ./
@@ -7,7 +7,7 @@ COPY config.example.json /app/config.example.json
 COPY webui ./
 RUN npm run build
 
-FROM golang:1.26 AS go-builder
+FROM --platform=$BUILDPLATFORM golang:1.26 AS go-builder
 WORKDIR /app
 ARG TARGETOS
 ARG TARGETARCH
@@ -22,14 +22,12 @@ RUN set -eux; \
     if [ -z "${BUILD_VERSION_RESOLVED}" ] && [ -f VERSION ]; then BUILD_VERSION_RESOLVED="$(cat VERSION | tr -d "[:space:]")"; fi; \
     CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" go build -ldflags="-s -w -X ds2api/internal/version.BuildVersion=${BUILD_VERSION_RESOLVED}" -o /out/ds2api ./cmd/ds2api
 
-FROM busybox:1.36.1-musl AS busybox-tools
+FROM --platform=$BUILDPLATFORM alpine:3.20 AS certs
+RUN apk add --no-cache ca-certificates
 
-FROM debian:bookworm-slim AS runtime-base
+FROM scratch AS runtime-base
 WORKDIR /app
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=busybox-tools /bin/busybox /usr/local/bin/busybox
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 EXPOSE 5001
 CMD ["/usr/local/bin/ds2api"]
 
@@ -39,7 +37,7 @@ COPY --from=go-builder /out/ds2api /usr/local/bin/ds2api
 COPY --from=go-builder /app/config.example.json /app/config.example.json
 COPY --from=webui-builder /app/static/admin /app/static/admin
 
-FROM busybox-tools AS dist-extract
+FROM --platform=$BUILDPLATFORM busybox:1.36.1-musl AS dist-extract
 ARG TARGETARCH
 COPY dist/docker-input/linux_amd64.tar.gz /tmp/ds2api_linux_amd64.tar.gz
 COPY dist/docker-input/linux_arm64.tar.gz /tmp/ds2api_linux_arm64.tar.gz
@@ -54,7 +52,6 @@ RUN set -eux; \
     test -n "${PKG_DIR}"; \
     mkdir -p /out/static; \
     cp "${PKG_DIR}/ds2api" /out/ds2api; \
-
     cp "${PKG_DIR}/config.example.json" /out/config.example.json; \
     cp -R "${PKG_DIR}/static/admin" /out/static/admin
 
