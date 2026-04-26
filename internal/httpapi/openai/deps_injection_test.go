@@ -16,6 +16,7 @@ type mockOpenAIConfig struct {
 	embedProv           string
 	historySplitEnabled bool
 	historySplitTurns   int
+	historySplitUseFile *bool
 }
 
 func (m mockOpenAIConfig) ModelAliases() map[string]string { return m.aliases }
@@ -40,6 +41,12 @@ func (m mockOpenAIConfig) HistorySplitTriggerAfterTurns() int {
 		return 1
 	}
 	return m.historySplitTurns
+}
+func (m mockOpenAIConfig) HistorySplitUseFile() bool {
+	if m.historySplitUseFile == nil {
+		return true
+	}
+	return *m.historySplitUseFile
 }
 
 func TestNormalizeOpenAIChatRequestWithConfigInterface(t *testing.T) {

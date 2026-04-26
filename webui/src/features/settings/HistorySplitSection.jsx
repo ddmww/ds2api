@@ -37,6 +37,24 @@ export default function HistorySplitSection({ t, form, setForm }) {
                     />
                     <p className="text-xs text-muted-foreground">{t('settings.historySplitTriggerHelp')}</p>
                 </label>
+                <label className="flex items-start gap-3 rounded-lg border border-border bg-background/60 p-4">
+                    <input
+                        type="checkbox"
+                        checked={Boolean(form.history_split.use_file ?? true)}
+                        onChange={(e) => setForm((prev) => ({
+                            ...prev,
+                            history_split: {
+                                ...prev.history_split,
+                                use_file: e.target.checked,
+                            },
+                        }))}
+                        className="mt-1 h-4 w-4 rounded border-border"
+                    />
+                    <div className="space-y-1">
+                        <span className="text-sm font-medium block">{t('settings.historySplitUseFile')}</span>
+                        <span className="text-xs text-muted-foreground block">{t('settings.historySplitUseFileDesc')}</span>
+                    </div>
+                </label>
             </div>
         </div>
     )

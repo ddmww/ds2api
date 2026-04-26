@@ -317,7 +317,10 @@ func TestChatCompletionsHistorySplitPersistsHistoryText(t *testing.T) {
 	if strings.Contains(full.HistoryText, "latest user turn") {
 		t.Fatalf("expected latest turn to stay out of persisted history text, got %q", full.HistoryText)
 	}
-	if len(ds.uploadCalls) != 0 {
-		t.Fatalf("expected history split to avoid file upload, got %d", len(ds.uploadCalls))
+	if len(ds.uploadCalls) != 1 {
+		t.Fatalf("expected history upload to happen, got %d", len(ds.uploadCalls))
+	}
+	if full.HistoryText != string(ds.uploadCalls[0].Data) {
+		t.Fatalf("expected persisted history text to match uploaded HISTORY.txt contents")
 	}
 }

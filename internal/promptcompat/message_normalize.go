@@ -35,6 +35,55 @@ func NormalizeOpenAIMessagesForPrompt(raw []any, traceID string) []map[string]an
 			})
 		case "user", "system", "developer":
 			out = append(out, map[string]any{
+				"role":    normalizeOpenAIRoleForPrompt(role),
+				"content": NormalizeOpenAIContentForPrompt(msg["content"]),
+			})
+		default:
+			content := NormalizeOpenAIContentForPrompt(msg["content"])
+			if content == "" {
+				continue
+			}
+			if role == "" {
+				role = "user"
+			}
+			out = append(out, map[string]any{
+				"role":    normalizeOpenAIRoleForPrompt(role),
+				"content": content,
+			})
+		}
+	}
+	return out
+}
+
+func NormalizeOpenAIMessagesForGrok(raw []any, traceID string) []map[string]any {
+	_ = traceID
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		msg, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		role := strings.ToLower(strings.TrimSpace(asString(msg["role"])))
+		switch role {
+		case "assistant":
+			content := buildAssistantContentForGrok(msg)
+			if content == "" {
+				continue
+			}
+			out = append(out, map[string]any{
+				"role":    "assistant",
+				"content": content,
+			})
+		case "tool", "function":
+			content := buildToolContentForPrompt(msg)
+			out = append(out, map[string]any{
+				"role":         "tool",
+				"tool_call_id": msg["tool_call_id"],
+				"name":         msg["name"],
+				"content":      content,
+			})
+		case "user", "system", "developer":
+			out = append(out, map[string]any{
 				"role":    role,
 				"content": NormalizeOpenAIContentForPrompt(msg["content"]),
 			})
@@ -56,6 +105,33 @@ func NormalizeOpenAIMessagesForPrompt(raw []any, traceID string) []map[string]an
 }
 
 func buildAssistantContentForPrompt(msg map[string]any) string {
+	content := strings.TrimSpace(NormalizeOpenAIContentForPrompt(msg["content"]))
+	reasoning := strings.TrimSpace(normalizeOpenAIReasoningContentForPrompt(msg["reasoning_content"]))
+	if reasoning == "" {
+		reasoning = strings.TrimSpace(extractOpenAIReasoningContentFromMessage(msg["content"]))
+	}
+	toolHistory := prompt.FormatToolCallsForPrompt(msg["tool_calls"])
+	parts := make([]string, 0, 3)
+	if reasoning != "" {
+		parts = append(parts, formatPromptLabeledBlock(assistantReasoningLabel, reasoning))
+	}
+	if content != "" {
+		parts = append(parts, content)
+	}
+	if toolHistory != "" {
+		parts = append(parts, toolHistory)
+	}
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	default:
+		return strings.Join(parts, "\n\n")
+	}
+}
+
+func buildAssistantContentForGrok(msg map[string]any) string {
 	content := strings.TrimSpace(NormalizeOpenAIContentForPrompt(msg["content"]))
 	toolHistory := prompt.FormatToolCallsForPrompt(msg["tool_calls"])
 	parts := make([]string, 0, 2)
@@ -155,8 +231,8 @@ func NormalizeOpenAIContentForPrompt(v any) string {
 
 func normalizeOpenAIRoleForPrompt(role string) string {
 	role = strings.ToLower(strings.TrimSpace(role))
-	if role == "" {
-		return "user"
+	if role == "developer" {
+		return "system"
 	}
 	return role
 }

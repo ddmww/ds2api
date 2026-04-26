@@ -199,4 +199,5 @@ type AutoDeleteConfig struct {
 type HistorySplitConfig struct {
 	Enabled           *bool `json:"enabled,omitempty"`
 	TriggerAfterTurns *int  `json:"trigger_after_turns,omitempty"`
+	UseFile           *bool `json:"use_file,omitempty"`
 }

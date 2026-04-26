@@ -3,11 +3,19 @@ package history
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"ds2api/internal/auth"
+	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
+)
+
+const (
+	historySplitFilename    = "HISTORY.txt"
+	historySplitContentType = "text/plain; charset=utf-8"
+	historySplitPurpose     = "assistants"
 )
 
 type Service struct {
@@ -16,7 +24,11 @@ type Service struct {
 }
 
 func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
-	if s.DS == nil || s.Store == nil || a == nil {
+	if s.Store == nil {
+		return stdReq, nil
+	}
+	useFile := s.Store.HistorySplitUseFile()
+	if useFile && (s.DS == nil || a == nil) {
 		return stdReq, nil
 	}
 
@@ -25,14 +37,39 @@ func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptco
 		return stdReq, nil
 	}
 
-	historyText := promptcompat.BuildOpenAIHistoryTranscript(historyMessages)
+	historyText := promptcompat.BuildOpenAIInlineHistoryTranscript(historyMessages)
+	if useFile {
+		historyText = promptcompat.BuildOpenAIHistoryTranscript(historyMessages)
+	}
 	if strings.TrimSpace(historyText) == "" {
 		return stdReq, errors.New("history split produced empty transcript")
 	}
 
-	promptMessages = injectHistoryContextMessage(promptMessages, historyText)
+	if !useFile {
+		promptMessages = injectHistoryContextMessage(promptMessages, historyText)
+		stdReq.Messages = promptMessages
+		stdReq.HistoryText = historyText
+		stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPromptForGrok(promptMessages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
+		return stdReq, nil
+	}
+
+	result, err := s.DS.UploadFile(ctx, a, dsclient.UploadFileRequest{
+		Filename:    historySplitFilename,
+		ContentType: historySplitContentType,
+		Purpose:     historySplitPurpose,
+		Data:        []byte(historyText),
+	}, 3)
+	if err != nil {
+		return stdReq, fmt.Errorf("upload history file: %w", err)
+	}
+	fileID := strings.TrimSpace(result.ID)
+	if fileID == "" {
+		return stdReq, errors.New("upload history file returned empty file id")
+	}
+
 	stdReq.Messages = promptMessages
 	stdReq.HistoryText = historyText
+	stdReq.RefFileIDs = prependUniqueRefFileID(stdReq.RefFileIDs, fileID)
 	stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPrompt(promptMessages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
 	return stdReq, nil
 }
@@ -87,6 +124,23 @@ func SplitOpenAIHistoryMessages(messages []any, triggerAfterTurns int) ([]any, [
 		return messages, nil
 	}
 	return promptMessages, historyMessages
+}
+
+func prependUniqueRefFileID(existing []string, fileID string) []string {
+	fileID = strings.TrimSpace(fileID)
+	if fileID == "" {
+		return existing
+	}
+	out := make([]string, 0, len(existing)+1)
+	out = append(out, fileID)
+	for _, id := range existing {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" || strings.EqualFold(trimmed, fileID) {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
 }
 
 func injectHistoryContextMessage(messages []any, historyText string) []any {

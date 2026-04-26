@@ -208,3 +208,12 @@ func (s *Store) HistorySplitTriggerAfterTurns() int {
 	}
 	return *s.cfg.HistorySplit.TriggerAfterTurns
 }
+
+func (s *Store) HistorySplitUseFile() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.HistorySplit.UseFile == nil {
+		return true
+	}
+	return *s.cfg.HistorySplit.UseFile
+}

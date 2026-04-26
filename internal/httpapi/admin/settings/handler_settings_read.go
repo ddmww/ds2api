@@ -35,6 +35,7 @@ func (h *Handler) getSettings(w http.ResponseWriter, _ *http.Request) {
 		"history_split": map[string]any{
 			"enabled":             h.Store.HistorySplitEnabled(),
 			"trigger_after_turns": h.Store.HistorySplitTriggerAfterTurns(),
+			"use_file":            h.Store.HistorySplitUseFile(),
 		},
 		"model_aliases":     snap.ModelAliases,
 		"env_backed":        h.Store.IsEnvBacked(),

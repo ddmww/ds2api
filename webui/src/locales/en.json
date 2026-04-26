@@ -389,6 +389,8 @@
         "historySplitEnabledDesc": "This capability is now enabled globally; legacy disabled values are ignored.",
         "historySplitTriggerAfterTurns": "Trigger threshold (user turns)",
         "historySplitTriggerHelp": "Default is 1, which means history split starts from the second turn.",
+        "historySplitUseFile": "Use HISTORY.txt file context",
+        "historySplitUseFileDesc": "Enabled uses the original file upload mode; disabled inlines history in the grok2api-style prompt.",
         "compatibilityTitle": "Compatibility",
         "compatibilityDesc": "Compatibility controls that keep stream output closer to the wire format or safer for the web UI.",
         "stripReferenceMarkers": "Strip [reference:N] markers",

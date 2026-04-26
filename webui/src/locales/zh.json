@@ -389,6 +389,8 @@
         "historySplitEnabledDesc": "该能力现在全局开启；旧配置里的关闭值会被忽略。",
         "historySplitTriggerAfterTurns": "触发阈值（用户回合数）",
         "historySplitTriggerHelp": "默认值为 1，表示从第二轮开始拆分历史。",
+        "historySplitUseFile": "使用 HISTORY.txt 文件上下文",
+        "historySplitUseFileDesc": "开启时使用原来的文件上传方式；关闭时按 grok2api 风格把历史内联进提示词。",
         "compatibilityTitle": "兼容性设置",
         "compatibilityDesc": "用于控制输出格式兼容性，避免把模型原始流里的标记直接暴露到前端。",
         "stripReferenceMarkers": "移除 [reference:N] 标记",

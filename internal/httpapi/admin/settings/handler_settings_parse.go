@@ -205,6 +205,10 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 			}
 			cfg.TriggerAfterTurns = &n
 		}
+		if v, exists := raw["use_file"]; exists {
+			b := boolFrom(v)
+			cfg.UseFile = &b
+		}
 		if err := config.ValidateHistorySplitConfig(*cfg); err != nil {
 			return nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, err
 		}

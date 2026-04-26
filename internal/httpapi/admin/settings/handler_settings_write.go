@@ -80,6 +80,9 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 			if historySplitCfg.TriggerAfterTurns != nil {
 				c.HistorySplit.TriggerAfterTurns = historySplitCfg.TriggerAfterTurns
 			}
+			if historySplitCfg.UseFile != nil {
+				c.HistorySplit.UseFile = historySplitCfg.UseFile
+			}
 		}
 		if aliasMap != nil {
 			c.ModelAliases = aliasMap

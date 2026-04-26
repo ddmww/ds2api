@@ -45,6 +45,7 @@ type ConfigReader interface {
 	AutoDeleteSessions() bool
 	HistorySplitEnabled() bool
 	HistorySplitTriggerAfterTurns() int
+	HistorySplitUseFile() bool
 }
 
 type Deps struct {

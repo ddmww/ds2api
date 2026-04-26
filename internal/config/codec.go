@@ -51,7 +51,7 @@ func (c Config) MarshalJSON() ([]byte, error) {
 		m["truncation_auto_continue"] = c.Truncation
 	}
 	m["auto_delete"] = c.AutoDelete
-	if c.HistorySplit.Enabled != nil || c.HistorySplit.TriggerAfterTurns != nil {
+	if c.HistorySplit.Enabled != nil || c.HistorySplit.TriggerAfterTurns != nil || c.HistorySplit.UseFile != nil {
 		m["history_split"] = c.HistorySplit
 	}
 	if c.VercelSyncHash != "" {
@@ -182,6 +182,7 @@ func (c Config) Clone() Config {
 		HistorySplit: HistorySplitConfig{
 			Enabled:           cloneBoolPtr(c.HistorySplit.Enabled),
 			TriggerAfterTurns: cloneIntPtr(c.HistorySplit.TriggerAfterTurns),
+			UseFile:           cloneBoolPtr(c.HistorySplit.UseFile),
 		},
 		VercelSyncHash:   c.VercelSyncHash,
 		VercelSyncTime:   c.VercelSyncTime,

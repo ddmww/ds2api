@@ -13,6 +13,10 @@ type ConfigReader interface {
 	CompatWideInputStrictOutput() bool
 }
 
+type historySplitUseFileReader interface {
+	HistorySplitUseFile() bool
+}
+
 func NormalizeOpenAIChatRequest(store ConfigReader, req map[string]any, traceID string) (StandardRequest, error) {
 	model, _ := req["model"].(string)
 	messagesRaw, _ := req["messages"].([]any)
@@ -30,7 +34,7 @@ func NormalizeOpenAIChatRequest(store ConfigReader, req map[string]any, traceID 
 		responseModel = resolvedModel
 	}
 	toolPolicy := DefaultToolChoicePolicy()
-	finalPrompt, toolNames := BuildOpenAIPrompt(messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
+	finalPrompt, toolNames := BuildOpenAIPromptForHistoryMode(store, messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
 	toolNames = ensureToolDetectionEnabled(toolNames, req["tools"])
 	passThrough := collectOpenAIChatPassThrough(req)
 	refFileIDs := CollectOpenAIRefFileIDs(req)
@@ -84,7 +88,7 @@ func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, tra
 	if err != nil {
 		return StandardRequest{}, err
 	}
-	finalPrompt, toolNames := BuildOpenAIPrompt(messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
+	finalPrompt, toolNames := BuildOpenAIPromptForHistoryMode(store, messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
 	toolNames = ensureToolDetectionEnabled(toolNames, req["tools"])
 	if !toolPolicy.IsNone() {
 		toolPolicy.Allowed = namesToSet(toolNames)
@@ -122,6 +126,13 @@ func ensureToolDetectionEnabled(toolNames []string, toolsRaw any) []string {
 	// are malformed or lack explicit names; parsed tool payload names are no
 	// longer filtered by this list.
 	return []string{"__any_tool__"}
+}
+
+func BuildOpenAIPromptForHistoryMode(store ConfigReader, messagesRaw []any, toolsRaw any, traceID string, toolPolicy ToolChoicePolicy, thinkingEnabled bool) (string, []string) {
+	if reader, ok := store.(historySplitUseFileReader); ok && !reader.HistorySplitUseFile() {
+		return BuildOpenAIPromptForGrok(messagesRaw, toolsRaw, traceID, toolPolicy, thinkingEnabled)
+	}
+	return BuildOpenAIPrompt(messagesRaw, toolsRaw, traceID, toolPolicy, thinkingEnabled)
 }
 
 func collectOpenAIChatPassThrough(req map[string]any) map[string]any {
