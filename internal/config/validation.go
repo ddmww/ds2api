@@ -21,6 +21,9 @@ func ValidateConfig(c Config) error {
 	if err := ValidateEmbeddingsConfig(c.Embeddings); err != nil {
 		return err
 	}
+	if err := ValidateVisionConfig(c.Vision); err != nil {
+		return err
+	}
 	if err := ValidateUpstreamBlockerConfig(c.UpstreamBlocker); err != nil {
 		return err
 	}
@@ -114,6 +117,31 @@ func ValidateResponsesConfig(responses ResponsesConfig) error {
 
 func ValidateEmbeddingsConfig(embeddings EmbeddingsConfig) error {
 	return ValidateTrimmedString("embeddings.provider", embeddings.Provider, false)
+}
+
+func ValidateVisionConfig(vision VisionConfig) error {
+	if !vision.Enabled &&
+		strings.TrimSpace(vision.BaseURL) == "" &&
+		strings.TrimSpace(vision.APIKey) == "" &&
+		strings.TrimSpace(vision.Model) == "" &&
+		strings.TrimSpace(vision.Prompt) == "" {
+		return nil
+	}
+	if err := ValidateTrimmedString("vision.base_url", vision.BaseURL, true); err != nil {
+		return err
+	}
+	if err := ValidateTrimmedString("vision.api_key", vision.APIKey, true); err != nil {
+		return err
+	}
+	if err := ValidateTrimmedString("vision.model", vision.Model, true); err != nil {
+		return err
+	}
+	if strings.TrimSpace(vision.Prompt) != "" {
+		if err := ValidateTrimmedString("vision.prompt", vision.Prompt, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ValidateUpstreamBlockerConfig(blocker UpstreamBlockerConfig) error {

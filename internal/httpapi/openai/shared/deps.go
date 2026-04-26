@@ -41,6 +41,7 @@ type ConfigReader interface {
 	ToolcallEarlyEmitConfidence() string
 	ResponsesStoreTTLSeconds() int
 	EmbeddingsProvider() string
+	VisionConfig() config.VisionConfig
 	AutoDeleteMode() string
 	AutoDeleteSessions() bool
 	HistorySplitEnabled() bool

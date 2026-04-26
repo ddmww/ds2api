@@ -54,7 +54,13 @@ type inlineDecodedFile struct {
 }
 
 func (h *Handler) PreprocessInlineFileInputs(ctx context.Context, a *auth.RequestAuth, req map[string]any) error {
-	if h == nil || h.DS == nil || len(req) == 0 {
+	if h == nil || len(req) == 0 {
+		return nil
+	}
+	if err := h.preprocessVisionInputs(ctx, req); err != nil {
+		return err
+	}
+	if h.DS == nil {
 		return nil
 	}
 	state := &inlineUploadState{

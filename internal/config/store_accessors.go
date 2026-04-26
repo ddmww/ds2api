@@ -62,6 +62,12 @@ func (s *Store) EmbeddingsProvider() string {
 	return strings.TrimSpace(s.cfg.Embeddings.Provider)
 }
 
+func (s *Store) VisionConfig() VisionConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.Vision
+}
+
 func (s *Store) UpstreamBlockerConfig() UpstreamBlockerConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

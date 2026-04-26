@@ -34,6 +34,57 @@ func CollectOpenAIRefFileIDs(req map[string]any) []string {
 	return out
 }
 
+func ContainsOpenAIImageInput(req map[string]any) bool {
+	if len(req) == 0 {
+		return false
+	}
+	for _, key := range []string{"attachments", "messages", "input"} {
+		if containsOpenAIImageInput(req[key]) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsOpenAIImageInput(raw any) bool {
+	switch x := raw.(type) {
+	case []any:
+		for _, item := range x {
+			if containsOpenAIImageInput(item) {
+				return true
+			}
+		}
+	case map[string]any:
+		blockType := strings.ToLower(strings.TrimSpace(asString(x["type"])))
+		if blockType == "image" || blockType == "image_url" || blockType == "input_image" || blockType == "image_file" {
+			return true
+		}
+		if imageURL, ok := x["image_url"].(map[string]any); ok {
+			if strings.TrimSpace(asString(imageURL["url"])) != "" {
+				return true
+			}
+		}
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(asString(x["mime_type"]))), "image/") ||
+			strings.HasPrefix(strings.ToLower(strings.TrimSpace(asString(x["media_type"]))), "image/") ||
+			strings.HasPrefix(strings.ToLower(strings.TrimSpace(asString(x["content_type"]))), "image/") {
+			return true
+		}
+		for _, key := range []string{"attachments", "messages", "input", "content", "files", "items", "data", "source", "file", "image_file", "image_url"} {
+			if nested, ok := x[key]; ok {
+				if key == "content" || key == "input" {
+					if _, ok := nested.(string); ok {
+						continue
+					}
+				}
+				if containsOpenAIImageInput(nested) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func appendOpenAIRefFileIDs(out *[]string, seen map[string]struct{}, raw any) {
 	switch x := raw.(type) {
 	case string:
@@ -67,7 +118,7 @@ func appendOpenAIRefFileIDs(out *[]string, seen map[string]struct{}, raw any) {
 		// if they are plain strings (handled by the top-level switch), but they are usually
 		// nested inside the map branch anyway.
 		// To be safe, we only recurse into these known container keys.
-		for _, key := range []string{"ref_file_ids", "file_ids", "attachments", "messages", "input", "content", "files", "items", "data", "source"} {
+		for _, key := range []string{"ref_file_ids", "file_ids", "attachments", "messages", "input", "content", "files", "items", "data", "source", "image_file"} {
 			if nested, ok := x[key]; ok {
 				// If it's a message content that is a string, we must NOT treat it as an ID.
 				if key == "content" || key == "input" {

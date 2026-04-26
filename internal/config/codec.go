@@ -44,6 +44,9 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if strings.TrimSpace(c.Embeddings.Provider) != "" {
 		m["embeddings"] = c.Embeddings
 	}
+	if c.Vision.Enabled || strings.TrimSpace(c.Vision.BaseURL) != "" || strings.TrimSpace(c.Vision.APIKey) != "" || strings.TrimSpace(c.Vision.Model) != "" || strings.TrimSpace(c.Vision.Prompt) != "" {
+		m["vision"] = c.Vision
+	}
 	if c.UpstreamBlocker.Enabled || c.UpstreamBlocker.CaseSensitive || len(c.UpstreamBlocker.Keywords) > 0 || strings.TrimSpace(c.UpstreamBlocker.Message) != "" {
 		m["upstream_blocker"] = c.UpstreamBlocker
 	}
@@ -116,6 +119,10 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 			if err := json.Unmarshal(v, &c.Embeddings); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
 			}
+		case "vision":
+			if err := json.Unmarshal(v, &c.Vision); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
 		case "upstream_blocker":
 			if err := json.Unmarshal(v, &c.UpstreamBlocker); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
@@ -166,6 +173,7 @@ func (c Config) Clone() Config {
 		},
 		Responses:  c.Responses,
 		Embeddings: c.Embeddings,
+		Vision:     c.Vision,
 		UpstreamBlocker: UpstreamBlockerConfig{
 			Enabled:       c.UpstreamBlocker.Enabled,
 			CaseSensitive: c.UpstreamBlocker.CaseSensitive,

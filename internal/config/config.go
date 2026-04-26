@@ -18,6 +18,7 @@ type Config struct {
 	Compat           CompatConfig          `json:"compat,omitempty"`
 	Responses        ResponsesConfig       `json:"responses,omitempty"`
 	Embeddings       EmbeddingsConfig      `json:"embeddings,omitempty"`
+	Vision           VisionConfig          `json:"vision,omitempty"`
 	UpstreamBlocker  UpstreamBlockerConfig `json:"upstream_blocker,omitempty"`
 	Truncation       TruncationConfig      `json:"truncation_auto_continue,omitempty"`
 	AutoDelete       AutoDeleteConfig      `json:"auto_delete"`
@@ -175,6 +176,14 @@ type ResponsesConfig struct {
 
 type EmbeddingsConfig struct {
 	Provider string `json:"provider,omitempty"`
+}
+
+type VisionConfig struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	BaseURL string `json:"base_url,omitempty"`
+	APIKey  string `json:"api_key,omitempty"`
+	Model   string `json:"model,omitempty"`
+	Prompt  string `json:"prompt,omitempty"`
 }
 
 type UpstreamBlockerConfig struct {

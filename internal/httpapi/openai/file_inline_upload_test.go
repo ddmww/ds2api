@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ds2api/internal/auth"
+	"ds2api/internal/config"
 	dsclient "ds2api/internal/deepseek/client"
 )
 
@@ -194,6 +195,105 @@ func TestResponsesUploadsInlineFilesBeforeCompletion(t *testing.T) {
 	refIDs, _ := ds.completionReq["ref_file_ids"].([]any)
 	if len(refIDs) != 1 || refIDs[0] != "file-inline-1" {
 		t.Fatalf("unexpected completion ref_file_ids: %#v", ds.completionReq["ref_file_ids"])
+	}
+}
+
+func TestPreprocessInlineFileInputsVisionRewritesLastUserImageToText(t *testing.T) {
+	visionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&map[string]any{})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"The screenshot shows a login form."}}]}`))
+	}))
+	defer visionServer.Close()
+
+	ds := &inlineUploadDSStub{}
+	h := &openAITestSurface{
+		Store: mockOpenAIConfig{
+			wideInput: true,
+			vision: config.VisionConfig{
+				Enabled: true,
+				BaseURL: visionServer.URL,
+				APIKey:  "vision-key",
+				Model:   "gpt-4o-mini",
+			},
+		},
+		DS: ds,
+	}
+	req := map[string]any{
+		"messages": []any{
+			map[string]any{"role": "user", "content": []any{map[string]any{"type": "input_text", "text": "earlier"}}},
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{"type": "input_text", "text": "Please read this image"},
+					map[string]any{"type": "image_url", "image_url": map[string]any{"url": "data:image/png;base64,QUJDRA=="}},
+				},
+			},
+		},
+	}
+
+	if err := h.preprocessInlineFileInputs(context.Background(), &auth.RequestAuth{DeepSeekToken: "token"}, req); err != nil {
+		t.Fatalf("preprocess failed: %v", err)
+	}
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no DS file upload when external vision is enabled, got %d", len(ds.uploadCalls))
+	}
+	messages, _ := req["messages"].([]any)
+	last, _ := messages[len(messages)-1].(map[string]any)
+	content, _ := last["content"].([]any)
+	if len(content) != 2 {
+		t.Fatalf("expected image block to be replaced by text blocks, got %#v", content)
+	}
+	lastBlock, _ := content[len(content)-1].(map[string]any)
+	text := strings.TrimSpace(asString(lastBlock["text"]))
+	if !strings.Contains(text, "The screenshot shows a login form.") {
+		t.Fatalf("expected vision text to be appended, got %#v", lastBlock)
+	}
+	if _, ok := req["ref_file_ids"]; ok {
+		t.Fatalf("expected no ref_file_ids after vision rewrite, got %#v", req["ref_file_ids"])
+	}
+}
+
+func TestChatCompletionsVisionPreprocessSkipsInlineUploadAndRefFiles(t *testing.T) {
+	visionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"The image contains a code snippet."}}]}`))
+	}))
+	defer visionServer.Close()
+
+	ds := &inlineUploadDSStub{}
+	h := &openAITestSurface{
+		Store: mockOpenAIConfig{
+			wideInput: true,
+			vision: config.VisionConfig{
+				Enabled: true,
+				BaseURL: visionServer.URL,
+				APIKey:  "vision-key",
+				Model:   "gpt-4o-mini",
+			},
+		},
+		Auth: streamStatusAuthStub{},
+		DS:   ds,
+	}
+	reqBody := `{"model":"deepseek-v4-flash","messages":[{"role":"user","content":[{"type":"input_text","text":"describe"},{"type":"image_url","image_url":{"url":"data:image/png;base64,QUJDRA=="}}]}],"stream":false}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer direct-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	h.ChatCompletions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no inline upload when external vision is enabled, got %d", len(ds.uploadCalls))
+	}
+	if ds.completionReq == nil {
+		t.Fatal("expected completion payload to be captured")
+	}
+	if refIDs, ok := ds.completionReq["ref_file_ids"].([]any); ok && len(refIDs) > 0 {
+		t.Fatalf("expected no completion ref_file_ids after vision rewrite, got %#v", refIDs)
 	}
 }
 
