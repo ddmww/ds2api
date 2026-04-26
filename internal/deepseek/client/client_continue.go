@@ -36,9 +36,9 @@ type continueState struct {
 }
 
 // wrapCompletionWithAutoContinue wraps the completion response body so that
-// if the upstream indicates the response is incomplete (WIP / INCOMPLETE /
-// AUTO_CONTINUE), ds2api will automatically call the DeepSeek continue
-// endpoint and splice the continuation SSE stream onto the original.
+// if the visible output looks incomplete, ds2api will automatically call the
+// DeepSeek continue endpoint and splice the continuation SSE stream onto the
+// original.
 // The caller sees a single, seamless SSE stream.
 func (c *Client) wrapCompletionWithAutoContinue(ctx context.Context, a *auth.RequestAuth, payload map[string]any, powResp string, resp *http.Response) *http.Response {
 	if resp == nil || resp.Body == nil {
@@ -284,26 +284,23 @@ func (s *continueState) observe(data string) {
 	}
 }
 
-// shouldContinue returns true when the upstream indicates the response is
-// not yet finished, or when the final visible output looks hard-truncated.
+// shouldContinue returns true based only on visible-output completeness.
+// Upstream status values are intentionally ignored here: DeepSeek may emit
+// WIP/INCOMPLETE/AUTO_CONTINUE/CONTENT_FILTER states that do not reliably
+// mean the visible answer should be continued. This mirrors cursor2api's
+// approach of treating truncation as a text-shape problem, while using
+// DeepSeek's native continue endpoint rather than re-sending the full prompt.
 func (s *continueState) shouldContinue() (bool, string) {
 	if s == nil {
 		return false, ""
 	}
-	if s.finished || s.responseMessageID <= 0 || strings.TrimSpace(s.sessionID) == "" {
-		if s.finished && s.truncationEnabled && s.responseMessageID > 0 && strings.TrimSpace(s.sessionID) != "" {
-			if truncation.ShouldContinue(s.text.String(), s.plainTextContinue, s.minChars) {
-				return true, "truncated"
-			}
-		}
+	if !s.truncationEnabled || s.responseMessageID <= 0 || strings.TrimSpace(s.sessionID) == "" {
 		return false, ""
 	}
-	switch strings.ToUpper(strings.TrimSpace(s.lastStatus)) {
-	case "WIP", "INCOMPLETE", "AUTO_CONTINUE":
-		return true, strings.ToLower(strings.TrimSpace(s.lastStatus))
-	default:
-		return false, ""
+	if truncation.ShouldContinue(s.text.String(), s.plainTextContinue, s.minChars) {
+		return true, "truncated"
 	}
+	return false, ""
 }
 
 // prepareForNextRound resets ephemeral state before processing the next
