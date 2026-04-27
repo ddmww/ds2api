@@ -39,6 +39,15 @@ func (s *Store) CompatStripReferenceMarkers() bool {
 	return *s.cfg.Compat.StripReferenceMarkers
 }
 
+func (s *Store) CompatStreamToolBuffer() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Compat.StreamToolBuffer == nil {
+		return true
+	}
+	return *s.cfg.Compat.StreamToolBuffer
+}
+
 func (s *Store) ToolcallMode() string {
 	return "feature_match"
 }

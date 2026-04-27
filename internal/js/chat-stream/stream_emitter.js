@@ -28,9 +28,24 @@ function createChatCompletionEmitter({ res, sessionID, created, model, isClosed 
     });
   };
 
+  const sendInitialRoleFrame = () => {
+    if (firstChunkSent) {
+      return;
+    }
+    firstChunkSent = true;
+    sendFrame({
+      id: sessionID,
+      object: 'chat.completion.chunk',
+      created,
+      model,
+      choices: [{ delta: { role: 'assistant' }, index: 0 }],
+    });
+  };
+
   return {
     sendFrame,
     sendDeltaFrame,
+    sendInitialRoleFrame,
   };
 }
 

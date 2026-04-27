@@ -214,7 +214,7 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *htt
 	}
 
 	created := time.Now().Unix()
-	bufferToolContent := len(toolNames) > 0
+	bufferToolContent := len(toolNames) > 0 && h.compatStreamToolBuffer()
 	emitEarlyToolDeltas := h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence()
 	stripReferenceMarkers := h.compatStripReferenceMarkers()
 	initialType := "text"
@@ -237,6 +237,7 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *htt
 		bufferToolContent,
 		emitEarlyToolDeltas,
 	)
+	streamRuntime.sendInitialRoleChunk()
 
 	streamengine.ConsumeSSE(streamengine.ConsumeConfig{
 		Context:             r.Context(),

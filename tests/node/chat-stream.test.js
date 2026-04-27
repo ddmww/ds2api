@@ -120,6 +120,12 @@ function parseSSEDataFrames(body) {
     .map((frame) => frame.slice(5).trim());
 }
 
+function jsonFramesWithoutInitialRole(frames) {
+  const parsed = frames.filter((frame) => frame !== '[DONE]').map((frame) => JSON.parse(frame));
+  return parsed.filter((frame) => frame?.choices?.[0]?.delta?.role !== 'assistant'
+    || Object.keys(frame.choices[0].delta).length > 1);
+}
+
 async function runMockVercelStream(upstreamLines, prepareOverrides = {}) {
   return runMockVercelStreamSequence([upstreamLines], prepareOverrides);
 }
@@ -183,12 +189,14 @@ test('chat-stream exposes parser test hooks', () => {
 
 test('vercel stream emits Go-parity empty-output failure on DONE', async () => {
   const { frames } = await runMockVercelStream(['data: [DONE]\n\n']);
-  assert.equal(frames.length, 2);
-  const failed = JSON.parse(frames[0]);
+  assert.equal(frames.length, 3);
+  const initial = JSON.parse(frames[0]);
+  assert.equal(initial.choices[0].delta.role, 'assistant');
+  const failed = JSON.parse(frames[1]);
   assert.equal(failed.status_code, 429);
   assert.equal(failed.error.type, 'rate_limit_error');
   assert.equal(failed.error.code, 'upstream_empty_output');
-  assert.equal(frames[1], '[DONE]');
+  assert.equal(frames[2], '[DONE]');
 });
 
 test('vercel stream retries empty output once and keeps one terminal frame', async () => {
@@ -196,7 +204,7 @@ test('vercel stream retries empty output once and keeps one terminal frame', asy
     ['data: [DONE]\n\n'],
     ['data: {"p":"response/content","v":"visible"}\n\n', 'data: [DONE]\n\n'],
   ]);
-  const parsed = frames.filter((frame) => frame !== '[DONE]').map((frame) => JSON.parse(frame));
+  const parsed = jsonFramesWithoutInitialRole(frames);
   const completionBodies = fetchBodies.filter((body) => Object.hasOwn(body, 'prompt'));
   assert.equal(fetchURLs.filter((url) => url === 'https://chat.deepseek.com/api/v0/chat/completion').length, 2);
   assert.equal(frames.filter((frame) => frame === '[DONE]').length, 1);
@@ -214,7 +222,7 @@ test('vercel stream exhausts DeepSeek continue before synthetic retry', async ()
     ],
     ['data: {"p":"response/content","v":"continued"}\n\n', 'data: [DONE]\n\n'],
   ]);
-  const parsed = frames.filter((frame) => frame !== '[DONE]').map((frame) => JSON.parse(frame));
+  const parsed = jsonFramesWithoutInitialRole(frames);
   assert.equal(fetchURLs.filter((url) => url === 'https://chat.deepseek.com/api/v0/chat/completion').length, 1);
   assert.equal(fetchURLs.filter((url) => url === 'https://chat.deepseek.com/api/v0/chat/continue').length, 1);
   assert.equal(parsed[0].choices[0].delta.content, 'continued');
@@ -224,12 +232,14 @@ test('vercel stream exhausts DeepSeek continue before synthetic retry', async ()
 
 test('vercel stream emits content_filter failure when upstream filters empty output', async () => {
   const { frames } = await runMockVercelStream(['data: {"code":"content_filter"}\n\n']);
-  assert.equal(frames.length, 2);
-  const failed = JSON.parse(frames[0]);
+  assert.equal(frames.length, 3);
+  const initial = JSON.parse(frames[0]);
+  assert.equal(initial.choices[0].delta.role, 'assistant');
+  const failed = JSON.parse(frames[1]);
   assert.equal(failed.status_code, 400);
   assert.equal(failed.error.type, 'invalid_request_error');
   assert.equal(failed.error.code, 'content_filter');
-  assert.equal(frames[1], '[DONE]');
+  assert.equal(frames[2], '[DONE]');
 });
 
 test('vercel stream keeps stop finish when content_filter arrives after visible text', async () => {
@@ -237,7 +247,7 @@ test('vercel stream keeps stop finish when content_filter arrives after visible 
     'data: {"p":"response/content","v":"hello"}\n\n',
     'data: {"code":"content_filter"}\n\n',
   ]);
-  const parsed = frames.filter((frame) => frame !== '[DONE]').map((frame) => JSON.parse(frame));
+  const parsed = jsonFramesWithoutInitialRole(frames);
   assert.equal(parsed[0].choices[0].delta.content, 'hello');
   assert.equal(parsed[1].choices[0].finish_reason, 'stop');
   assert.equal(parsed[1].usage.completion_tokens, 2);

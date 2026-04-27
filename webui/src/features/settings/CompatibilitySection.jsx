@@ -29,6 +29,30 @@ export default function CompatibilitySection({ t, form, setForm }) {
                     />
                 </button>
             </div>
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <label className="text-sm font-medium">{t('settings.streamToolBuffer')}</label>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('settings.streamToolBufferHelp')}</p>
+                </div>
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.compat?.stream_tool_buffer ?? true}
+                    onClick={() => setForm((prev) => ({
+                        ...prev,
+                        compat: { ...prev.compat, stream_tool_buffer: !Boolean(prev.compat?.stream_tool_buffer ?? true) },
+                    }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                        form.compat?.stream_tool_buffer ?? true ? 'bg-primary' : 'bg-muted'
+                    }`}
+                >
+                    <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            form.compat?.stream_tool_buffer ?? true ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                    />
+                </button>
+            </div>
         </div>
     )
 }

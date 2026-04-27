@@ -90,6 +90,20 @@ func (s *chatStreamRuntime) sendKeepAlive() {
 	_ = s.rc.Flush()
 }
 
+func (s *chatStreamRuntime) sendInitialRoleChunk() {
+	if s.firstChunkSent {
+		return
+	}
+	s.firstChunkSent = true
+	s.sendChunk(openaifmt.BuildChatStreamChunk(
+		s.completionID,
+		s.created,
+		s.model,
+		[]map[string]any{openaifmt.BuildChatStreamDeltaChoice(0, map[string]any{"role": "assistant"})},
+		nil,
+	))
+}
+
 func (s *chatStreamRuntime) sendChunk(v any) {
 	b, _ := json.Marshal(v)
 	_, _ = s.w.Write([]byte("data: "))

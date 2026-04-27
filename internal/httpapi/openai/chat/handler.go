@@ -42,6 +42,13 @@ func (h *Handler) compatStripReferenceMarkers() bool {
 	return shared.CompatStripReferenceMarkers(h.Store)
 }
 
+func (h *Handler) compatStreamToolBuffer() bool {
+	if h == nil {
+		return true
+	}
+	return shared.CompatStreamToolBuffer(h.Store)
+}
+
 func (h *Handler) applyHistorySplit(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
 	if h == nil {
 		return stdReq, nil

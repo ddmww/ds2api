@@ -423,6 +423,8 @@
         "compatibilityTitle": "Compatibility",
         "compatibilityDesc": "Compatibility controls that keep stream output closer to the wire format or safer for the web UI.",
         "stripReferenceMarkers": "Strip [reference:N] markers",
+        "streamToolBuffer": "Stream tool-call buffer",
+        "streamToolBufferHelp": "Disable for faster text passthrough; keep enabled if OpenAI tools are used.",
         "modelTitle": "Model mapping",
         "modelAliases": "Global model aliases (JSON)",
         "autoDeleteTitle": "Session Cleanup Policy",

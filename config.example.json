@@ -45,7 +45,8 @@
   },
   "compat": {
     "wide_input_strict_output": true,
-    "strip_reference_markers": true
+    "strip_reference_markers": true,
+    "stream_tool_buffer": true
   },
   "responses": {
     "store_ttl_seconds": 900

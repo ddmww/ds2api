@@ -148,6 +148,7 @@ func (c *Config) normalizeModelAliases() {
 type CompatConfig struct {
 	WideInputStrictOutput *bool `json:"wide_input_strict_output,omitempty"`
 	StripReferenceMarkers *bool `json:"strip_reference_markers,omitempty"`
+	StreamToolBuffer      *bool `json:"stream_tool_buffer,omitempty"`
 }
 
 type AdminConfig struct {

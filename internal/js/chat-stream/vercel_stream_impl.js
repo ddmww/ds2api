@@ -143,7 +143,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
     let thinkingText = '';
     let outputText = '';
     let usagePrompt = finalPrompt;
-    const toolSieveEnabled = toolPolicy.toolSieveEnabled;
+    const toolSieveEnabled = toolPolicy.toolSieveEnabled && compatStreamToolBuffer(prep.body);
     const toolSieveState = createToolSieveState();
     let toolCallsEmitted = false;
     let toolCallsDoneEmitted = false;
@@ -152,13 +152,14 @@ async function handleVercelStream(req, res, rawBody, payload) {
     const decoder = new TextDecoder();
     let buffered = '';
     let ended = false;
-    const { sendFrame, sendDeltaFrame } = createChatCompletionEmitter({
+    const { sendFrame, sendDeltaFrame, sendInitialRoleFrame } = createChatCompletionEmitter({
       res,
       sessionID,
       created,
       model,
       isClosed: () => clientClosed,
     });
+    sendInitialRoleFrame();
 
     const finish = async (reason, options = {}) => {
       if (ended) {
@@ -410,6 +411,14 @@ async function handleVercelStream(req, res, rawBody, payload) {
 
 function toBool(v) {
   return v === true;
+}
+
+function compatStreamToolBuffer(prepBody) {
+  const compat = prepBody && prepBody.compat && typeof prepBody.compat === 'object' ? prepBody.compat : null;
+  if (!compat || compat.stream_tool_buffer === undefined || compat.stream_tool_buffer === null) {
+    return true;
+  }
+  return compat.stream_tool_buffer !== false;
 }
 
 function clonePayloadWithEmptyOutputRetryPrompt(payload) {

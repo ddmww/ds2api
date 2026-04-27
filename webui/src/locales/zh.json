@@ -423,6 +423,8 @@
         "compatibilityTitle": "兼容性设置",
         "compatibilityDesc": "用于控制输出格式兼容性，避免把模型原始流里的标记直接暴露到前端。",
         "stripReferenceMarkers": "移除 [reference:N] 标记",
+        "streamToolBuffer": "流式工具调用缓冲",
+        "streamToolBufferHelp": "关闭后普通文本会更快透传；如果依赖 OpenAI tools，请保持开启。",
         "modelTitle": "模型映射",
         "modelAliases": "全局模型映射（JSON）",
         "autoDeleteTitle": "会话删除策略",
