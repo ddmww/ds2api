@@ -4,12 +4,12 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"ds2api/internal/auth"
 	"ds2api/internal/chathistory"
 	"ds2api/internal/config"
-	openaifmt "ds2api/internal/format/openai"
 	"ds2api/internal/prompt"
 	"ds2api/internal/promptcompat"
 )
@@ -26,6 +26,11 @@ type chatHistorySession struct {
 	finalPrompt string
 	startParams chathistory.StartParams
 	disabled    bool
+
+	mu               sync.Mutex
+	persistMu        sync.Mutex
+	progressInFlight bool
+	completed        bool
 }
 
 func startChatHistory(store *chathistory.Store, r *http.Request, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) *chatHistorySession {
@@ -124,79 +129,13 @@ func extractAllMessages(messages []any) []chathistory.Message {
 	return out
 }
 
-func (s *chatHistorySession) progress(thinking, content string) {
-	if s == nil || s.store == nil || s.disabled {
-		return
-	}
-	now := time.Now()
-	if now.Sub(s.lastPersist) < 250*time.Millisecond {
-		return
-	}
-	s.lastPersist = now
-	s.persistUpdate(chathistory.UpdateParams{
-		Status:           "streaming",
-		ReasoningContent: thinking,
-		Content:          content,
-		StatusCode:       http.StatusOK,
-		ElapsedMs:        time.Since(s.startedAt).Milliseconds(),
-	})
-}
-
-func (s *chatHistorySession) success(statusCode int, thinking, content, finishReason string, usage map[string]any) {
-	if s == nil || s.store == nil || s.disabled {
-		return
-	}
-	s.persistUpdate(chathistory.UpdateParams{
-		Status:           "success",
-		ReasoningContent: thinking,
-		Content:          content,
-		StatusCode:       statusCode,
-		ElapsedMs:        time.Since(s.startedAt).Milliseconds(),
-		FinishReason:     finishReason,
-		Usage:            usage,
-		Completed:        true,
-	})
-}
-
-func (s *chatHistorySession) error(statusCode int, message, finishReason, thinking, content string) {
-	if s == nil || s.store == nil || s.disabled {
-		return
-	}
-	s.persistUpdate(chathistory.UpdateParams{
-		Status:           "error",
-		ReasoningContent: thinking,
-		Content:          content,
-		Error:            message,
-		StatusCode:       statusCode,
-		ElapsedMs:        time.Since(s.startedAt).Milliseconds(),
-		FinishReason:     finishReason,
-		Completed:        true,
-	})
-}
-
-func (s *chatHistorySession) stopped(thinking, content, finishReason string) {
-	if s == nil || s.store == nil || s.disabled {
-		return
-	}
-	s.persistUpdate(chathistory.UpdateParams{
-		Status:           "stopped",
-		ReasoningContent: thinking,
-		Content:          content,
-		StatusCode:       http.StatusOK,
-		ElapsedMs:        time.Since(s.startedAt).Milliseconds(),
-		FinishReason:     finishReason,
-		Usage:            openaifmt.BuildChatUsage(s.model, s.finalPrompt, thinking, content),
-		Completed:        true,
-	})
-}
-
 func (s *chatHistorySession) retryMissingEntry() bool {
-	if s == nil || s.store == nil || s.disabled {
+	if s == nil || s.store == nil || s.isDisabled() {
 		return false
 	}
 	entry, err := s.store.Start(s.startParams)
 	if errors.Is(err, chathistory.ErrDisabled) {
-		s.disabled = true
+		s.setDisabled()
 		return false
 	}
 	if entry.ID == "" {
@@ -212,38 +151,47 @@ func (s *chatHistorySession) retryMissingEntry() bool {
 	return true
 }
 
-func (s *chatHistorySession) persistUpdate(params chathistory.UpdateParams) {
-	if s == nil || s.store == nil || s.disabled {
-		return
-	}
-	if _, err := s.store.Update(s.entryID, params); err != nil {
-		s.handlePersistError(params, err)
-	}
-}
-
 func (s *chatHistorySession) handlePersistError(params chathistory.UpdateParams, err error) {
 	if err == nil || s == nil {
 		return
 	}
 	if errors.Is(err, chathistory.ErrDisabled) {
-		s.disabled = true
+		s.setDisabled()
 		return
 	}
 	if isChatHistoryMissingError(err) {
 		if s.retryMissingEntry() {
 			if _, retryErr := s.store.Update(s.entryID, params); retryErr != nil {
 				if errors.Is(retryErr, chathistory.ErrDisabled) || isChatHistoryMissingError(retryErr) {
-					s.disabled = true
+					s.setDisabled()
 					return
 				}
 				config.Logger.Warn("[chat_history] retry after missing entry failed", "error", retryErr)
 			}
 			return
 		}
-		s.disabled = true
+		s.setDisabled()
 		return
 	}
 	config.Logger.Warn("[chat_history] update failed", "error", err)
+}
+
+func (s *chatHistorySession) isDisabled() bool {
+	if s == nil {
+		return true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.disabled
+}
+
+func (s *chatHistorySession) setDisabled() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.disabled = true
+	s.mu.Unlock()
 }
 
 func isChatHistoryMissingError(err error) bool {

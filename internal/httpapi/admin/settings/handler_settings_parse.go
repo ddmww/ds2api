@@ -7,20 +7,6 @@ import (
 	"ds2api/internal/config"
 )
 
-func boolFrom(v any) bool {
-	if v == nil {
-		return false
-	}
-	switch x := v.(type) {
-	case bool:
-		return x
-	case string:
-		return strings.ToLower(strings.TrimSpace(x)) == "true"
-	default:
-		return false
-	}
-}
-
 func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *config.RuntimeConfig, *config.CompatConfig, *config.ResponsesConfig, *config.EmbeddingsConfig, *config.VisionConfig, *config.UpstreamBlockerConfig, *config.TruncationConfig, *config.AutoDeleteConfig, *config.HistorySplitConfig, *config.CurrentInputFileConfig, *config.ThinkingInjectionConfig, map[string]string, error) {
 	var (
 		adminCfg        *config.AdminConfig
@@ -283,36 +269,6 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 	}
 
 	return adminCfg, runtimeCfg, compatCfg, respCfg, embCfg, visionCfg, blockerCfg, truncationCfg, autoDeleteCfg, historySplitCfg, currentInputCfg, thinkingInjCfg, aliasMap, nil
-}
-
-func parseKeywordList(v any) []string {
-	switch x := v.(type) {
-	case []any:
-		out := make([]string, 0, len(x))
-		for _, item := range x {
-			trimmed := strings.TrimSpace(fmt.Sprintf("%v", item))
-			if trimmed != "" {
-				out = append(out, trimmed)
-			}
-		}
-		return out
-	case []string:
-		return x
-	case string:
-		parts := strings.FieldsFunc(x, func(r rune) bool {
-			return r == '\r' || r == '\n'
-		})
-		out := make([]string, 0, len(parts))
-		for _, part := range parts {
-			trimmed := strings.TrimSpace(part)
-			if trimmed != "" {
-				out = append(out, trimmed)
-			}
-		}
-		return out
-	default:
-		return nil
-	}
 }
 
 func historySplitCfgEnabled(cfg *config.HistorySplitConfig) *bool {
