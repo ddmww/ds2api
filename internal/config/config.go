@@ -8,24 +8,26 @@ import (
 )
 
 type Config struct {
-	Keys             []string              `json:"keys,omitempty"`
-	APIKeys          []APIKey              `json:"api_keys,omitempty"`
-	Accounts         []Account             `json:"accounts,omitempty"`
-	Proxies          []Proxy               `json:"proxies,omitempty"`
-	ModelAliases     map[string]string     `json:"model_aliases,omitempty"`
-	Admin            AdminConfig           `json:"admin,omitempty"`
-	Runtime          RuntimeConfig         `json:"runtime,omitempty"`
-	Compat           CompatConfig          `json:"compat,omitempty"`
-	Responses        ResponsesConfig       `json:"responses,omitempty"`
-	Embeddings       EmbeddingsConfig      `json:"embeddings,omitempty"`
-	Vision           VisionConfig          `json:"vision,omitempty"`
-	UpstreamBlocker  UpstreamBlockerConfig `json:"upstream_blocker,omitempty"`
-	Truncation       TruncationConfig      `json:"truncation_auto_continue,omitempty"`
-	AutoDelete       AutoDeleteConfig      `json:"auto_delete"`
-	HistorySplit     HistorySplitConfig    `json:"history_split"`
-	VercelSyncHash   string                `json:"_vercel_sync_hash,omitempty"`
-	VercelSyncTime   int64                 `json:"_vercel_sync_time,omitempty"`
-	AdditionalFields map[string]any        `json:"-"`
+	Keys              []string                `json:"keys,omitempty"`
+	APIKeys           []APIKey                `json:"api_keys,omitempty"`
+	Accounts          []Account               `json:"accounts,omitempty"`
+	Proxies           []Proxy                 `json:"proxies,omitempty"`
+	ModelAliases      map[string]string       `json:"model_aliases,omitempty"`
+	Admin             AdminConfig             `json:"admin,omitempty"`
+	Runtime           RuntimeConfig           `json:"runtime,omitempty"`
+	Compat            CompatConfig            `json:"compat,omitempty"`
+	Responses         ResponsesConfig         `json:"responses,omitempty"`
+	Embeddings        EmbeddingsConfig        `json:"embeddings,omitempty"`
+	Vision            VisionConfig            `json:"vision,omitempty"`
+	UpstreamBlocker   UpstreamBlockerConfig   `json:"upstream_blocker,omitempty"`
+	Truncation        TruncationConfig        `json:"truncation_auto_continue,omitempty"`
+	AutoDelete        AutoDeleteConfig        `json:"auto_delete"`
+	HistorySplit      HistorySplitConfig      `json:"history_split"`
+	CurrentInputFile  CurrentInputFileConfig  `json:"current_input_file,omitempty"`
+	ThinkingInjection ThinkingInjectionConfig `json:"thinking_injection,omitempty"`
+	VercelSyncHash    string                  `json:"_vercel_sync_hash,omitempty"`
+	VercelSyncTime    int64                   `json:"_vercel_sync_time,omitempty"`
+	AdditionalFields  map[string]any          `json:"-"`
 }
 
 type Account struct {
@@ -103,7 +105,6 @@ func (c *Config) NormalizeCredentials() {
 	}
 
 	c.normalizeModelAliases()
-	c.forceHistorySplitEnabled()
 }
 
 // DropInvalidAccounts removes accounts that cannot be addressed by admin APIs
@@ -142,14 +143,6 @@ func (c *Config) normalizeModelAliases() {
 	} else {
 		c.ModelAliases = aliases
 	}
-}
-
-func (c *Config) forceHistorySplitEnabled() {
-	if c == nil {
-		return
-	}
-	enabled := true
-	c.HistorySplit.Enabled = &enabled
 }
 
 type CompatConfig struct {
@@ -209,4 +202,14 @@ type HistorySplitConfig struct {
 	Enabled           *bool `json:"enabled,omitempty"`
 	TriggerAfterTurns *int  `json:"trigger_after_turns,omitempty"`
 	UseFile           *bool `json:"use_file,omitempty"`
+}
+
+type CurrentInputFileConfig struct {
+	Enabled  *bool `json:"enabled,omitempty"`
+	MinChars int   `json:"min_chars,omitempty"`
+}
+
+type ThinkingInjectionConfig struct {
+	Enabled *bool  `json:"enabled,omitempty"`
+	Prompt  string `json:"prompt,omitempty"`
 }

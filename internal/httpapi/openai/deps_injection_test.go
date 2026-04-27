@@ -19,6 +19,10 @@ type mockOpenAIConfig struct {
 	historySplitEnabled bool
 	historySplitTurns   int
 	historySplitUseFile *bool
+	currentInputEnabled bool
+	currentInputMin     int
+	thinkingInjection   *bool
+	thinkingPrompt      string
 }
 
 func (m mockOpenAIConfig) ModelAliases() map[string]string { return m.aliases }
@@ -51,6 +55,17 @@ func (m mockOpenAIConfig) HistorySplitUseFile() bool {
 	}
 	return *m.historySplitUseFile
 }
+func (m mockOpenAIConfig) CurrentInputFileEnabled() bool { return m.currentInputEnabled }
+func (m mockOpenAIConfig) CurrentInputFileMinChars() int {
+	return m.currentInputMin
+}
+func (m mockOpenAIConfig) ThinkingInjectionEnabled() bool {
+	if m.thinkingInjection == nil {
+		return false
+	}
+	return *m.thinkingInjection
+}
+func (m mockOpenAIConfig) ThinkingInjectionPrompt() string { return m.thinkingPrompt }
 
 func TestNormalizeOpenAIChatRequestWithConfigInterface(t *testing.T) {
 	cfg := mockOpenAIConfig{
@@ -72,6 +87,28 @@ func TestNormalizeOpenAIChatRequestWithConfigInterface(t *testing.T) {
 	}
 	if !out.Search || !out.Thinking {
 		t.Fatalf("unexpected model flags: thinking=%v search=%v", out.Thinking, out.Search)
+	}
+}
+
+func TestNormalizeOpenAIChatRequestDisablesThinkingForNoThinkingModel(t *testing.T) {
+	cfg := mockOpenAIConfig{wideInput: true}
+	req := map[string]any{
+		"model":            "deepseek-v4-pro-nothinking",
+		"messages":         []any{map[string]any{"role": "user", "content": "hello"}},
+		"reasoning_effort": "high",
+	}
+	out, err := promptcompat.NormalizeOpenAIChatRequest(cfg, req, "")
+	if err != nil {
+		t.Fatalf("promptcompat.NormalizeOpenAIChatRequest error: %v", err)
+	}
+	if out.ResolvedModel != "deepseek-v4-pro-nothinking" {
+		t.Fatalf("resolved model mismatch: got=%q", out.ResolvedModel)
+	}
+	if out.Thinking {
+		t.Fatalf("expected nothinking model to force thinking off")
+	}
+	if out.Search {
+		t.Fatalf("expected search=false for deepseek-v4-pro-nothinking, got=%v", out.Search)
 	}
 }
 

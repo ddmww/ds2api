@@ -24,7 +24,7 @@ type Service struct {
 }
 
 func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
-	if s.Store == nil {
+	if s.Store == nil || !s.Store.HistorySplitEnabled() {
 		return stdReq, nil
 	}
 	useFile := s.Store.HistorySplitUseFile()

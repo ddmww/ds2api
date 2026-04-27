@@ -106,10 +106,10 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if stdReq.Stream {
-		h.handleStream(w, r, resp, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession)
+		h.handleStreamWithRetry(w, r, a, resp, payload, pow, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession)
 		return
 	}
-	h.handleNonStream(w, resp, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession)
+	h.handleNonStreamWithRetry(w, r.Context(), a, resp, payload, pow, sessionID, stdReq.ResponseModel, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, historySession)
 }
 
 func (h *Handler) autoDeleteRemoteSession(ctx context.Context, a *auth.RequestAuth, sessionID string) {
@@ -159,10 +159,12 @@ func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, co
 
 	stripReferenceMarkers := h.compatStripReferenceMarkers()
 	finalThinking := cleanVisibleOutput(result.Thinking, stripReferenceMarkers)
+	finalToolDetectionThinking := cleanVisibleOutput(result.ToolDetectionThinking, stripReferenceMarkers)
 	finalText := cleanVisibleOutput(result.Text, stripReferenceMarkers)
 	if searchEnabled {
 		finalText = replaceCitationMarkersWithLinks(finalText, result.CitationLinks)
 	}
+	detected := detectAssistantToolCalls(finalText, finalThinking, finalToolDetectionThinking, toolNames)
 	if err := shared.AssertUpstreamAllowed(h.Store, finalThinking+"\n"+finalText); err != nil {
 		if historySession != nil {
 			historySession.error(http.StatusForbidden, err.Error(), "upstream_blocked", finalThinking, finalText)
@@ -170,7 +172,7 @@ func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, co
 		shared.WriteUpstreamBlockedError(w, err)
 		return
 	}
-	if shouldWriteUpstreamEmptyOutputError(finalText) {
+	if shouldWriteUpstreamEmptyOutputError(finalText) && len(detected.Calls) == 0 {
 		status, message, code := upstreamEmptyOutputDetail(result.ContentFilter, finalText, finalThinking)
 		if historySession != nil {
 			historySession.error(status, message, code, finalThinking, finalText)
@@ -178,7 +180,7 @@ func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, co
 		writeUpstreamEmptyOutputError(w, finalText, finalThinking, result.ContentFilter)
 		return
 	}
-	respBody := openaifmt.BuildChatCompletion(completionID, model, finalPrompt, finalThinking, finalText, toolNames)
+	respBody := openaifmt.BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThinking, finalText, detected.Calls)
 	finishReason := "stop"
 	if choices, ok := respBody["choices"].([]map[string]any); ok && len(choices) > 0 {
 		if fr, _ := choices[0]["finish_reason"].(string); strings.TrimSpace(fr) != "" {
@@ -257,9 +259,9 @@ func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *htt
 		},
 		OnFinalize: func(reason streamengine.StopReason, _ error) {
 			if string(reason) == "content_filter" {
-				streamRuntime.finalize("content_filter")
+				streamRuntime.finalize("content_filter", false)
 			} else {
-				streamRuntime.finalize("stop")
+				streamRuntime.finalize("stop", false)
 			}
 			if historySession == nil {
 				return

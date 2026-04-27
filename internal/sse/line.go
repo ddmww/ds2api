@@ -4,12 +4,13 @@ import "fmt"
 
 // LineResult is the normalized parse result for one DeepSeek SSE line.
 type LineResult struct {
-	Parsed        bool
-	Stop          bool
-	ContentFilter bool
-	ErrorMessage  string
-	Parts         []ContentPart
-	NextType      string
+	Parsed                     bool
+	Stop                       bool
+	ContentFilter              bool
+	ErrorMessage               string
+	Parts                      []ContentPart
+	ToolDetectionThinkingParts []ContentPart
+	NextType                   string
 }
 
 // ParseDeepSeekContentLine centralizes one-line DeepSeek SSE parsing for both
@@ -46,12 +47,14 @@ func ParseDeepSeekContentLine(raw []byte, thinkingEnabled bool, currentType stri
 			NextType:      currentType,
 		}
 	}
-	parts, finished, nextType := ParseSSEChunkForContent(chunk, thinkingEnabled, currentType)
+	parts, detectionThinkingParts, finished, nextType := ParseSSEChunkForContentDetailed(chunk, thinkingEnabled, currentType)
 	parts = filterLeakedContentFilterParts(parts)
+	detectionThinkingParts = filterLeakedContentFilterParts(detectionThinkingParts)
 	return LineResult{
-		Parsed:   true,
-		Stop:     finished,
-		Parts:    parts,
-		NextType: nextType,
+		Parsed:                     true,
+		Stop:                       finished,
+		Parts:                      parts,
+		ToolDetectionThinkingParts: detectionThinkingParts,
+		NextType:                   nextType,
 	}
 }

@@ -55,6 +55,14 @@
     "trigger_after_turns": 1,
     "use_file": true
   },
+  "current_input_file": {
+    "enabled": false,
+    "min_chars": 0
+  },
+  "thinking_injection": {
+    "enabled": true,
+    "prompt": ""
+  },
   "embeddings": {
     "provider": "deterministic"
   },

@@ -57,6 +57,12 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if c.HistorySplit.Enabled != nil || c.HistorySplit.TriggerAfterTurns != nil || c.HistorySplit.UseFile != nil {
 		m["history_split"] = c.HistorySplit
 	}
+	if c.CurrentInputFile.Enabled != nil || c.CurrentInputFile.MinChars != 0 {
+		m["current_input_file"] = c.CurrentInputFile
+	}
+	if c.ThinkingInjection.Enabled != nil || strings.TrimSpace(c.ThinkingInjection.Prompt) != "" {
+		m["thinking_injection"] = c.ThinkingInjection
+	}
 	if c.VercelSyncHash != "" {
 		m["_vercel_sync_hash"] = c.VercelSyncHash
 	}
@@ -139,6 +145,14 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 			if err := json.Unmarshal(v, &c.HistorySplit); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
 			}
+		case "current_input_file":
+			if err := json.Unmarshal(v, &c.CurrentInputFile); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
+		case "thinking_injection":
+			if err := json.Unmarshal(v, &c.ThinkingInjection); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
 		case "_vercel_sync_hash":
 			if err := json.Unmarshal(v, &c.VercelSyncHash); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
@@ -191,6 +205,14 @@ func (c Config) Clone() Config {
 			Enabled:           cloneBoolPtr(c.HistorySplit.Enabled),
 			TriggerAfterTurns: cloneIntPtr(c.HistorySplit.TriggerAfterTurns),
 			UseFile:           cloneBoolPtr(c.HistorySplit.UseFile),
+		},
+		CurrentInputFile: CurrentInputFileConfig{
+			Enabled:  cloneBoolPtr(c.CurrentInputFile.Enabled),
+			MinChars: c.CurrentInputFile.MinChars,
+		},
+		ThinkingInjection: ThinkingInjectionConfig{
+			Enabled: cloneBoolPtr(c.ThinkingInjection.Enabled),
+			Prompt:  c.ThinkingInjection.Prompt,
 		},
 		VercelSyncHash:   c.VercelSyncHash,
 		VercelSyncTime:   c.VercelSyncTime,

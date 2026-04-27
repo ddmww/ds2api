@@ -47,6 +47,10 @@ type ConfigReader interface {
 	HistorySplitEnabled() bool
 	HistorySplitTriggerAfterTurns() int
 	HistorySplitUseFile() bool
+	CurrentInputFileEnabled() bool
+	CurrentInputFileMinChars() int
+	ThinkingInjectionEnabled() bool
+	ThinkingInjectionPrompt() string
 }
 
 type Deps struct {

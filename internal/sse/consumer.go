@@ -10,10 +10,11 @@ import (
 // CollectResult holds the aggregated text and thinking content from a
 // DeepSeek SSE stream, consumed to completion (non-streaming use case).
 type CollectResult struct {
-	Text          string
-	Thinking      string
-	ContentFilter bool
-	CitationLinks map[int]string
+	Text                  string
+	Thinking              string
+	ToolDetectionThinking string
+	ContentFilter         bool
+	CitationLinks         map[int]string
 }
 
 // CollectStream fully consumes a DeepSeek SSE response and separates
@@ -28,6 +29,7 @@ func CollectStream(resp *http.Response, thinkingEnabled bool, closeBody bool) Co
 	}
 	text := strings.Builder{}
 	thinking := strings.Builder{}
+	toolDetectionThinking := strings.Builder{}
 	contentFilter := false
 	stopped := false
 	collector := newCitationLinkCollector()
@@ -70,12 +72,17 @@ func CollectStream(resp *http.Response, thinkingEnabled bool, closeBody bool) Co
 				text.WriteString(trimmed)
 			}
 		}
+		for _, p := range result.ToolDetectionThinkingParts {
+			trimmed := TrimContinuationOverlap(toolDetectionThinking.String(), p.Text)
+			toolDetectionThinking.WriteString(trimmed)
+		}
 		return true
 	})
 	return CollectResult{
-		Text:          text.String(),
-		Thinking:      thinking.String(),
-		ContentFilter: contentFilter,
-		CitationLinks: collector.build(),
+		Text:                  text.String(),
+		Thinking:              thinking.String(),
+		ToolDetectionThinking: toolDetectionThinking.String(),
+		ContentFilter:         contentFilter,
+		CitationLinks:         collector.build(),
 	}
 }
