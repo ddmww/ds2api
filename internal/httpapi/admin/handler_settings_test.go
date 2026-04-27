@@ -127,6 +127,39 @@ func TestUpdateSettingsValidation(t *testing.T) {
 	}
 }
 
+func TestUpdateSettingsPersistsStreamToolBufferFalse(t *testing.T) {
+	h := newAdminTestHandler(t, `{"keys":["k1"]}`)
+	payload := map[string]any{
+		"compat": map[string]any{
+			"stream_tool_buffer": false,
+		},
+	}
+	b, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPut, "/admin/settings", bytes.NewReader(b))
+	rec := httptest.NewRecorder()
+	h.updateSettings(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	snap := h.Store.Snapshot()
+	if snap.Compat.StreamToolBuffer == nil || *snap.Compat.StreamToolBuffer {
+		t.Fatalf("expected compat.stream_tool_buffer=false, got=%v", snap.Compat.StreamToolBuffer)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/admin/settings", nil)
+	getRec := httptest.NewRecorder()
+	h.getSettings(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", getRec.Code, getRec.Body.String())
+	}
+	var body map[string]any
+	_ = json.Unmarshal(getRec.Body.Bytes(), &body)
+	compat, _ := body["compat"].(map[string]any)
+	if got := boolFrom(compat["stream_tool_buffer"]); got {
+		t.Fatalf("expected response compat.stream_tool_buffer=false, body=%v", body)
+	}
+}
+
 func TestUpdateSettingsValidationRejectsTokenRefreshInterval(t *testing.T) {
 	h := newAdminTestHandler(t, `{"keys":["k1"]}`)
 	payload := map[string]any{

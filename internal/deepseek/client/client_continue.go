@@ -348,13 +348,13 @@ func dedupeContinuationContentLine(line []byte, state *continueState) ([]byte, b
 		return nil, false
 	}
 	path, _ := chunk["p"].(string)
-	partType := "text"
-	switch {
-	case path == "response/thinking_content":
+	var partType string
+	switch path {
+	case "response/thinking_content":
 		partType = "thinking"
-	case path == "response/content":
+	case "response/content":
 		partType = "text"
-	case path == "":
+	case "":
 		partType = state.currentType
 	default:
 		return nil, false

@@ -272,17 +272,6 @@ func TestCallCompletionAutoContinuesTruncatedFinishedText(t *testing.T) {
 	}
 }
 
-type failingOrCompletionDoer struct {
-	completionResp *http.Response
-}
-
-func (d failingOrCompletionDoer) Do(req *http.Request) (*http.Response, error) {
-	if strings.Contains(req.URL.Path, "/chat/completion") {
-		return d.completionResp, nil
-	}
-	return nil, errors.New("forced stream failure")
-}
-
 type sequenceCompletionDoer struct {
 	first *http.Response
 	calls int
