@@ -39,6 +39,7 @@ type responsesStreamRuntime struct {
 	toolDetectionThinking strings.Builder
 	text                  strings.Builder
 	visibleText           strings.Builder
+	responseMessageID     int
 	streamToolCallIDs     map[int]string
 	functionItemIDs       map[int]string
 	functionOutputIDs     map[int]int
@@ -204,6 +205,9 @@ func (s *responsesStreamRuntime) logToolPolicyRejections(textParsed toolcall.Too
 func (s *responsesStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedDecision {
 	if !parsed.Parsed {
 		return streamengine.ParsedDecision{}
+	}
+	if parsed.ResponseMessageID > 0 {
+		s.responseMessageID = parsed.ResponseMessageID
 	}
 	if parsed.ContentFilter || parsed.ErrorMessage != "" {
 		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReason("content_filter")}

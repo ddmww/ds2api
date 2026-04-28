@@ -24,17 +24,16 @@ func (s Service) ApplyCurrentInputFile(ctx context.Context, a *auth.RequestAuth,
 	}
 	threshold := s.Store.CurrentInputFileMinChars()
 
-	index, text := latestUserInputForFile(stdReq.Messages)
+	index, _ := latestUserInputForFile(stdReq.Messages)
 	if index < 0 {
-		return stdReq, nil
-	}
-	historySplitReached := s.Store.HistorySplitEnabled() && wouldSplitHistory(stdReq.Messages, s.Store.HistorySplitTriggerAfterTurns())
-	if len([]rune(text)) < threshold && !historySplitReached {
 		return stdReq, nil
 	}
 	fileText := promptcompat.BuildOpenAICurrentInputContextTranscript(stdReq.Messages)
 	if strings.TrimSpace(fileText) == "" {
 		return stdReq, errors.New("current user input file produced empty transcript")
+	}
+	if len([]rune(fileText)) < threshold && !s.Store.HistorySplitEnabled() {
+		return stdReq, nil
 	}
 
 	result, err := s.DS.UploadFile(ctx, a, dsclient.UploadFileRequest{
@@ -82,11 +81,6 @@ func latestUserInputForFile(messages []any) (int, string) {
 		return i, text
 	}
 	return -1, ""
-}
-
-func wouldSplitHistory(messages []any, triggerAfterTurns int) bool {
-	_, historyMessages := SplitOpenAIHistoryMessages(messages, triggerAfterTurns)
-	return len(historyMessages) > 0
 }
 
 func currentInputFilePrompt() string {

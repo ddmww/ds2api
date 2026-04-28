@@ -252,10 +252,6 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 		}
 		currentInputCfg = cfg
 	}
-	if boolPtrValue(historySplitCfgEnabled(historySplitCfg)) && boolPtrValue(currentInputCfgEnabled(currentInputCfg)) {
-		return fail(fmt.Errorf("history_split.enabled and current_input_file.enabled cannot both be true"))
-	}
-
 	if raw, ok := req["thinking_injection"].(map[string]any); ok {
 		cfg := &config.ThinkingInjectionConfig{}
 		if v, exists := raw["enabled"]; exists {
@@ -269,22 +265,4 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 	}
 
 	return adminCfg, runtimeCfg, compatCfg, respCfg, embCfg, visionCfg, blockerCfg, truncationCfg, autoDeleteCfg, historySplitCfg, currentInputCfg, thinkingInjCfg, aliasMap, nil
-}
-
-func historySplitCfgEnabled(cfg *config.HistorySplitConfig) *bool {
-	if cfg == nil {
-		return nil
-	}
-	return cfg.Enabled
-}
-
-func currentInputCfgEnabled(cfg *config.CurrentInputFileConfig) *bool {
-	if cfg == nil {
-		return nil
-	}
-	return cfg.Enabled
-}
-
-func boolPtrValue(v *bool) bool {
-	return v != nil && *v
 }

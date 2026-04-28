@@ -159,6 +159,9 @@ async function runMockVercelStreamSequence(upstreamSequences, prepareOverrides =
     if (textURL.includes('__stream_prepare=1')) {
       return jsonResponse(prepareBody);
     }
+    if (textURL.includes('__stream_pow=1')) {
+      return jsonResponse({ pow_header: 'pow-header-refreshed' });
+    }
     if (textURL.includes('__stream_release=1')) {
       return jsonResponse({ success: true });
     }
@@ -207,6 +210,7 @@ test('vercel stream retries empty output once and keeps one terminal frame', asy
   const parsed = jsonFramesWithoutInitialRole(frames);
   const completionBodies = fetchBodies.filter((body) => Object.hasOwn(body, 'prompt'));
   assert.equal(fetchURLs.filter((url) => url === 'https://chat.deepseek.com/api/v0/chat/completion').length, 2);
+  assert.equal(fetchURLs.filter((url) => url.includes('__stream_pow=1')).length, 1);
   assert.equal(frames.filter((frame) => frame === '[DONE]').length, 1);
   assert.equal(parsed[0].choices[0].delta.content, 'visible');
   assert.equal(parsed[1].choices[0].finish_reason, 'stop');
@@ -225,9 +229,65 @@ test('vercel stream exhausts DeepSeek continue before synthetic retry', async ()
   const parsed = jsonFramesWithoutInitialRole(frames);
   assert.equal(fetchURLs.filter((url) => url === 'https://chat.deepseek.com/api/v0/chat/completion').length, 1);
   assert.equal(fetchURLs.filter((url) => url === 'https://chat.deepseek.com/api/v0/chat/continue').length, 1);
+  assert.equal(fetchURLs.filter((url) => url.includes('__stream_pow=1')).length, 1);
   assert.equal(parsed[0].choices[0].delta.content, 'continued');
   assert.equal(parsed[1].choices[0].finish_reason, 'stop');
   assert.equal(fetchBodies.some((body) => String(body.prompt || '').includes('Previous reply had no visible output')), false);
+});
+
+test('vercel stream reuses prior PoW when refresh fails', async () => {
+  const originalFetch = global.fetch;
+  const fetchURLs = [];
+  const completionPowHeaders = [];
+  let completionCalls = 0;
+  global.fetch = async (url, init = {}) => {
+    const textURL = String(url);
+    fetchURLs.push(textURL);
+    if (textURL.includes('__stream_prepare=1')) {
+      return jsonResponse({
+        session_id: 'chatcmpl-test',
+        lease_id: 'lease-test',
+        model: 'gpt-test',
+        final_prompt: 'hello',
+        thinking_enabled: false,
+        search_enabled: false,
+        compat: { strip_reference_markers: true },
+        tool_names: [],
+        deepseek_token: 'deepseek-token',
+        pow_header: 'pow-header-initial',
+        payload: { prompt: 'hello' },
+      });
+    }
+    if (textURL.includes('__stream_pow=1')) {
+      return jsonResponse({}, 500);
+    }
+    if (textURL.includes('__stream_release=1')) {
+      return jsonResponse({ success: true });
+    }
+    if (textURL === 'https://chat.deepseek.com/api/v0/chat/completion') {
+      completionPowHeaders.push(init.headers['x-ds-pow-response']);
+      completionCalls += 1;
+      if (completionCalls === 1) {
+        return sseResponse(['data: [DONE]\n\n']);
+      }
+      return sseResponse(['data: {"p":"response/content","v":"visible"}\n\n', 'data: [DONE]\n\n']);
+    }
+    throw new Error(`unexpected fetch url: ${textURL}`);
+  };
+  try {
+    const req = new MockStreamRequest();
+    const res = new MockStreamResponse();
+    const payload = { model: 'gpt-test', stream: true };
+    await handleVercelStream(req, res, Buffer.from(JSON.stringify(payload)), payload);
+    const frames = parseSSEDataFrames(res.bodyText());
+    const parsed = jsonFramesWithoutInitialRole(frames);
+    assert.deepEqual(completionPowHeaders, ['pow-header-initial', 'pow-header-initial']);
+    assert.equal(fetchURLs.filter((url) => url.includes('__stream_pow=1')).length, 1);
+    assert.equal(parsed[0].choices[0].delta.content, 'visible');
+    assert.equal(parsed[1].choices[0].finish_reason, 'stop');
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test('vercel stream emits content_filter failure when upstream filters empty output', async () => {

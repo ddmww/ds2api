@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	dsprotocol "ds2api/internal/deepseek/protocol"
+	"ds2api/internal/util"
 )
 
 // CollectResult holds the aggregated text and thinking content from a
@@ -15,6 +16,7 @@ type CollectResult struct {
 	ToolDetectionThinking string
 	ContentFilter         bool
 	CitationLinks         map[int]string
+	ResponseMessageID     int
 }
 
 // CollectStream fully consumes a DeepSeek SSE response and separates
@@ -33,6 +35,7 @@ func CollectStream(resp *http.Response, thinkingEnabled bool, closeBody bool) Co
 	contentFilter := false
 	stopped := false
 	collector := newCitationLinkCollector()
+	responseMessageID := 0
 	currentType := "text"
 	if thinkingEnabled {
 		currentType = "thinking"
@@ -41,6 +44,7 @@ func CollectStream(resp *http.Response, thinkingEnabled bool, closeBody bool) Co
 		chunk, done, parsed := ParseDeepSeekSSELine(line)
 		if parsed && !done {
 			collector.ingestChunk(chunk)
+			observeResponseMessageID(chunk, &responseMessageID)
 		}
 		if done {
 			return false
@@ -84,5 +88,32 @@ func CollectStream(resp *http.Response, thinkingEnabled bool, closeBody bool) Co
 		ToolDetectionThinking: toolDetectionThinking.String(),
 		ContentFilter:         contentFilter,
 		CitationLinks:         collector.build(),
+		ResponseMessageID:     responseMessageID,
+	}
+}
+
+// observeResponseMessageID extracts the response_message_id from a parsed SSE
+// chunk. It mirrors the extraction logic in client_continue.go's observe
+// method, checking top-level response_message_id, v.response.message_id, and
+// message.response.message_id.
+func observeResponseMessageID(chunk map[string]any, out *int) {
+	if chunk == nil || out == nil {
+		return
+	}
+	if id := util.IntFrom(chunk["response_message_id"]); id > 0 {
+		*out = id
+	}
+	v, _ := chunk["v"].(map[string]any)
+	if response, _ := v["response"].(map[string]any); response != nil {
+		if id := util.IntFrom(response["message_id"]); id > 0 {
+			*out = id
+		}
+	}
+	if message, _ := chunk["message"].(map[string]any); message != nil {
+		if response, _ := message["response"].(map[string]any); response != nil {
+			if id := util.IntFrom(response["message_id"]); id > 0 {
+				*out = id
+			}
+		}
 	}
 }

@@ -38,6 +38,7 @@ type chatStreamRuntime struct {
 	thinking              strings.Builder
 	toolDetectionThinking strings.Builder
 	text                  strings.Builder
+	responseMessageID     int
 
 	finalThinking     string
 	finalText         string
@@ -247,6 +248,9 @@ func (s *chatStreamRuntime) finalize(finishReason string, deferEmptyOutput bool)
 func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedDecision {
 	if !parsed.Parsed {
 		return streamengine.ParsedDecision{}
+	}
+	if parsed.ResponseMessageID > 0 {
+		s.responseMessageID = parsed.ResponseMessageID
 	}
 	if parsed.ContentFilter {
 		if strings.TrimSpace(s.text.String()) == "" {

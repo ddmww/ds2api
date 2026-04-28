@@ -154,6 +154,7 @@ func findPartialXMLToolTagStart(s string) int {
 		"<|tool_calls", "<|invoke", "<|parameter",
 		"<｜tool_calls", "<｜invoke", "<｜parameter",
 		"<|dsml|tool_calls", "<|dsml|invoke", "<|dsml|parameter",
+		"<｜dsml|tool_calls", "<｜dsml|invoke", "<｜dsml|parameter",
 		"<dsmltool_calls", "<dsmlinvoke", "<dsmlparameter",
 		"<dsml tool_calls", "<dsml invoke", "<dsml parameter",
 		"<dsml|tool_calls", "<dsml|invoke", "<dsml|parameter",

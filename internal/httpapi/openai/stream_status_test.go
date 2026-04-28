@@ -291,7 +291,7 @@ func TestChatCompletionsStreamEmitsFailureFrameWhenUpstreamOutputEmpty(t *testin
 
 func TestChatCompletionsStreamRetriesEmptyOutputOnSameSession(t *testing.T) {
 	ds := &streamStatusDSSeqStub{resps: []*http.Response{
-		makeOpenAISSEHTTPResponse(`data: {"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
+		makeOpenAISSEHTTPResponse(`data: {"response_message_id":42,"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
 		makeOpenAISSEHTTPResponse(`data: {"p":"response/content","v":"visible"}`, "data: [DONE]"),
 	}}
 	h := &openAITestSurface{
@@ -318,6 +318,10 @@ func TestChatCompletionsStreamRetriesEmptyOutputOnSameSession(t *testing.T) {
 	retryPrompt := asString(ds.payloads[1]["prompt"])
 	if !strings.Contains(retryPrompt, "Previous reply had no visible output. Please regenerate the visible final answer or tool call now.") {
 		t.Fatalf("expected retry suffix in prompt, got %q", retryPrompt)
+	}
+	// Verify multi-turn chaining: retry must set parent_message_id from first call's response_message_id.
+	if parentID, ok := ds.payloads[1]["parent_message_id"].(int); !ok || parentID != 42 {
+		t.Fatalf("expected retry parent_message_id=42, got %#v", ds.payloads[1]["parent_message_id"])
 	}
 
 	frames, done := parseSSEDataFrames(t, rec.Body.String())
@@ -347,7 +351,7 @@ func TestChatCompletionsStreamRetriesEmptyOutputOnSameSession(t *testing.T) {
 
 func TestChatCompletionsNonStreamRetriesThinkingOnlyOutput(t *testing.T) {
 	ds := &streamStatusDSSeqStub{resps: []*http.Response{
-		makeOpenAISSEHTTPResponse(`data: {"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
+		makeOpenAISSEHTTPResponse(`data: {"response_message_id":99,"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
 		makeOpenAISSEHTTPResponse(`data: {"p":"response/content","v":"visible"}`, "data: [DONE]"),
 	}}
 	h := &openAITestSurface{
@@ -367,6 +371,10 @@ func TestChatCompletionsNonStreamRetriesThinkingOnlyOutput(t *testing.T) {
 	}
 	if len(ds.payloads) != 2 {
 		t.Fatalf("expected one synthetic retry call, got %d", len(ds.payloads))
+	}
+	// Verify multi-turn chaining.
+	if parentID, ok := ds.payloads[1]["parent_message_id"].(int); !ok || parentID != 99 {
+		t.Fatalf("expected retry parent_message_id=99, got %#v", ds.payloads[1]["parent_message_id"])
 	}
 	var out map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
@@ -458,7 +466,7 @@ func TestResponsesStreamUsageIgnoresBatchAccumulatedTokenUsage(t *testing.T) {
 
 func TestResponsesStreamRetriesThinkingOnlyOutput(t *testing.T) {
 	ds := &streamStatusDSSeqStub{resps: []*http.Response{
-		makeOpenAISSEHTTPResponse(`data: {"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
+		makeOpenAISSEHTTPResponse(`data: {"response_message_id":77,"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
 		makeOpenAISSEHTTPResponse(`data: {"p":"response/content","v":"visible"}`, "data: [DONE]"),
 	}}
 	h := &openAITestSurface{
@@ -479,6 +487,10 @@ func TestResponsesStreamRetriesThinkingOnlyOutput(t *testing.T) {
 	if len(ds.payloads) != 2 {
 		t.Fatalf("expected one synthetic retry call, got %d", len(ds.payloads))
 	}
+	// Verify multi-turn chaining.
+	if parentID, ok := ds.payloads[1]["parent_message_id"].(int); !ok || parentID != 77 {
+		t.Fatalf("expected retry parent_message_id=77, got %#v", ds.payloads[1]["parent_message_id"])
+	}
 	body := rec.Body.String()
 	if strings.Contains(body, "response.failed") {
 		t.Fatalf("did not expect premature response.failed, body=%s", body)
@@ -493,7 +505,7 @@ func TestResponsesStreamRetriesThinkingOnlyOutput(t *testing.T) {
 
 func TestResponsesNonStreamRetriesThinkingOnlyOutput(t *testing.T) {
 	ds := &streamStatusDSSeqStub{resps: []*http.Response{
-		makeOpenAISSEHTTPResponse(`data: {"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
+		makeOpenAISSEHTTPResponse(`data: {"response_message_id":88,"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
 		makeOpenAISSEHTTPResponse(`data: {"p":"response/content","v":"visible"}`, "data: [DONE]"),
 	}}
 	h := &openAITestSurface{
@@ -513,6 +525,10 @@ func TestResponsesNonStreamRetriesThinkingOnlyOutput(t *testing.T) {
 	}
 	if len(ds.payloads) != 2 {
 		t.Fatalf("expected one synthetic retry call, got %d", len(ds.payloads))
+	}
+	// Verify multi-turn chaining.
+	if parentID, ok := ds.payloads[1]["parent_message_id"].(int); !ok || parentID != 88 {
+		t.Fatalf("expected retry parent_message_id=88, got %#v", ds.payloads[1]["parent_message_id"])
 	}
 	var out map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {

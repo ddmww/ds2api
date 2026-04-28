@@ -49,18 +49,15 @@ func (h *Handler) compatStreamToolBuffer() bool {
 	return shared.CompatStreamToolBuffer(h.Store)
 }
 
-func (h *Handler) applyHistorySplit(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
+func (h *Handler) applyCurrentInputFile(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
 	if h == nil {
 		return stdReq, nil
 	}
 	stdReq = shared.ApplyThinkingInjection(h.Store, stdReq)
 	svc := history.Service{Store: h.Store, DS: h.DS}
 	out, err := svc.ApplyCurrentInputFile(ctx, a, stdReq)
-	if err != nil {
-		return stdReq, err
-	}
-	if out.CurrentInputFileApplied {
-		return out, nil
+	if err != nil || out.CurrentInputFileApplied {
+		return out, err
 	}
 	return svc.Apply(ctx, a, out)
 }
@@ -98,7 +95,7 @@ func writeOpenAIInlineFileError(w http.ResponseWriter, err error) {
 	files.WriteInlineFileError(w, err)
 }
 
-func mapHistorySplitError(err error) (int, string) {
+func mapCurrentInputFileError(err error) (int, string) {
 	return history.MapError(err)
 }
 
@@ -138,8 +135,8 @@ func emptyOutputRetryMaxAttempts() int {
 	return shared.EmptyOutputRetryMaxAttempts()
 }
 
-func clonePayloadWithEmptyOutputRetryPrompt(payload map[string]any) map[string]any {
-	return shared.ClonePayloadWithEmptyOutputRetryPrompt(payload)
+func clonePayloadForEmptyOutputRetry(payload map[string]any, parentMessageID int) map[string]any {
+	return shared.ClonePayloadForEmptyOutputRetry(payload, parentMessageID)
 }
 
 func usagePromptWithEmptyOutputRetry(originalPrompt string, retryAttempts int) string {

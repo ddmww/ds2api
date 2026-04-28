@@ -25,6 +25,7 @@ const {
   asString,
   isAbortError,
   fetchStreamPrepare,
+  fetchStreamPow,
   relayPreparedFailure,
   createLeaseReleaser,
 } = require('./http_internal');
@@ -49,7 +50,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
   const sessionID = asString(prep.body.session_id) || `chatcmpl-${Date.now()}`;
   const leaseID = asString(prep.body.lease_id);
   const deepseekToken = asString(prep.body.deepseek_token);
-  const powHeader = asString(prep.body.pow_header);
+  const initialPowHeader = asString(prep.body.pow_header);
   const completionPayload = prep.body.payload && typeof prep.body.payload === 'object' ? prep.body.payload : null;
   const finalPrompt = asString(prep.body.final_prompt);
   const thinkingEnabled = toBool(prep.body.thinking_enabled);
@@ -59,7 +60,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
   const emitEarlyToolDeltas = toolPolicy.emitEarlyToolDeltas;
   const stripReferenceMarkers = boolDefaultTrue(prep.body.compat && prep.body.compat.strip_reference_markers);
 
-  if (!model || !leaseID || !deepseekToken || !powHeader || !completionPayload) {
+  if (!model || !leaseID || !deepseekToken || !initialPowHeader || !completionPayload) {
     writeOpenAIError(res, 500, 'invalid vercel prepare response');
     return;
   }
@@ -88,7 +89,32 @@ async function handleVercelStream(req, res, rawBody, payload) {
   res.on('close', onResClose);
 
   try {
-    const fetchDeepSeekStream = async (url, bodyPayload) => {
+    let currentPowHeader = initialPowHeader;
+    const refreshPowHeader = async (roundType) => {
+      try {
+        const pow = await fetchStreamPow(req, leaseID);
+        const nextPowHeader = asString(pow.body && pow.body.pow_header);
+        if (pow.ok && nextPowHeader) {
+          currentPowHeader = nextPowHeader;
+          return currentPowHeader;
+        }
+        console.warn('[vercel_stream_pow] refresh failed, reusing previous PoW', {
+          round_type: roundType,
+          status: pow.status || 0,
+        });
+      } catch (err) {
+        if (clientClosed || isAbortError(err)) {
+          return '';
+        }
+        console.warn('[vercel_stream_pow] refresh failed, reusing previous PoW', {
+          round_type: roundType,
+          error: err,
+        });
+      }
+      return currentPowHeader;
+    };
+
+    const fetchDeepSeekStream = async (url, bodyPayload, powHeader) => {
       try {
         return await fetch(url, {
           method: 'POST',
@@ -107,12 +133,18 @@ async function handleVercelStream(req, res, rawBody, payload) {
         throw err;
       }
     };
-    const fetchCompletion = (bodyPayload) => fetchDeepSeekStream(DEEPSEEK_COMPLETION_URL, bodyPayload);
-    const fetchContinue = (messageID) => fetchDeepSeekStream(DEEPSEEK_CONTINUE_URL, {
-      chat_session_id: sessionID,
-      message_id: messageID,
-      fallback_to_resume: true,
-    });
+    const fetchCompletion = (bodyPayload) => fetchDeepSeekStream(DEEPSEEK_COMPLETION_URL, bodyPayload, currentPowHeader);
+    const fetchContinue = async (messageID) => {
+      const powHeader = await refreshPowHeader('continue');
+      if (!powHeader) {
+        return null;
+      }
+      return fetchDeepSeekStream(DEEPSEEK_CONTINUE_URL, {
+        chat_session_id: sessionID,
+        message_id: messageID,
+        fallback_to_resume: true,
+      }, powHeader);
+    };
 
     let completionRes = await fetchCompletion(completionPayload);
     if (completionRes === null) {
@@ -372,7 +404,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
       }
 
       const terminal = await finish('stop', { deferEmpty: allowDeferEmpty });
-      return { terminal, retryable: !terminal && allowDeferEmpty };
+      return { terminal, retryable: !terminal && allowDeferEmpty, responseMessageID: continueState.responseMessageID };
     };
 
     let retryAttempts = 0;
@@ -391,9 +423,18 @@ async function handleVercelStream(req, res, rawBody, payload) {
         surface: 'chat.completions',
         stream: true,
         retry_attempt: retryAttempts,
+        parent_message_id: processed.responseMessageID || 0,
       });
       usagePrompt = usagePromptWithEmptyOutputRetry(finalPrompt, retryAttempts);
-      completionRes = await fetchCompletion(clonePayloadWithEmptyOutputRetryPrompt(completionPayload));
+      const retryPowHeader = await refreshPowHeader('retry');
+      if (!retryPowHeader) {
+        return;
+      }
+      completionRes = await fetchDeepSeekStream(
+        DEEPSEEK_COMPLETION_URL,
+        clonePayloadForEmptyOutputRetry(completionPayload, processed.responseMessageID),
+        retryPowHeader,
+      );
       if (completionRes === null) {
         return;
       }
@@ -421,11 +462,15 @@ function compatStreamToolBuffer(prepBody) {
   return compat.stream_tool_buffer !== false;
 }
 
-function clonePayloadWithEmptyOutputRetryPrompt(payload) {
-  return {
+function clonePayloadForEmptyOutputRetry(payload, parentMessageID) {
+  const clone = {
     ...(payload || {}),
     prompt: appendEmptyOutputRetrySuffix(asString(payload && payload.prompt)),
   };
+  if (parentMessageID && parentMessageID > 0) {
+    clone.parent_message_id = parentMessageID;
+  }
+  return clone;
 }
 
 function appendEmptyOutputRetrySuffix(prompt) {

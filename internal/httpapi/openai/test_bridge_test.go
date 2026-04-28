@@ -83,17 +83,18 @@ func (h *openAITestSurface) ChatCompletions(w http.ResponseWriter, r *http.Reque
 	h.chatHandler().ChatCompletions(w, r)
 }
 
-func (h *openAITestSurface) applyHistorySplit(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
+func (h *openAITestSurface) applyCurrentInputFile(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
 	stdReq = shared.ApplyThinkingInjection(h.Store, stdReq)
 	svc := history.Service{Store: h.Store, DS: h.DS}
 	out, err := svc.ApplyCurrentInputFile(ctx, a, stdReq)
-	if err != nil {
-		return stdReq, err
-	}
-	if out.CurrentInputFileApplied {
-		return out, nil
+	if err != nil || out.CurrentInputFileApplied {
+		return out, err
 	}
 	return svc.Apply(ctx, a, out)
+}
+
+func (h *openAITestSurface) applyHistorySplit(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
+	return h.applyCurrentInputFile(ctx, a, stdReq)
 }
 
 func (h *openAITestSurface) preprocessInlineFileInputs(ctx context.Context, a *auth.RequestAuth, req map[string]any) error {
@@ -112,6 +113,10 @@ func registerOpenAITestRoutes(r chi.Router, h *openAITestSurface) {
 
 func splitOpenAIHistoryMessages(messages []any, triggerAfterTurns int) ([]any, []any) {
 	return history.SplitOpenAIHistoryMessages(messages, triggerAfterTurns)
+}
+
+func buildOpenAICurrentInputContextTranscript(messages []any) string {
+	return promptcompat.BuildOpenAICurrentInputContextTranscript(messages)
 }
 
 func buildOpenAIHistoryTranscript(messages []any) string {

@@ -745,6 +745,51 @@ func TestProcessToolSieveFullwidthPipeVariantDoesNotLeak(t *testing.T) {
 	}
 }
 
+// Test <｜DSML|tool_calls> with DSML invoke/parameter tags should buffer the
+// wrapper instead of leaking it before the block is complete.
+func TestProcessToolSieveFullwidthDSMLPrefixVariantDoesNotLeak(t *testing.T) {
+	var state State
+	chunks := []string{
+		"<｜DSML|tool",
+		"_calls>\n",
+		"<|DSML|invoke name=\"Bash\">\n",
+		"<|DSML|parameter name=\"command\"><![CDATA[ls -la /Users/aq/Desktop/myproject/ds2api/]]></|DSML|parameter>\n",
+		"<|DSML|parameter name=\"description\"><![CDATA[List project root contents]]></|DSML|parameter>\n",
+		"</|DSML|invoke>\n",
+		"<|DSML|invoke name=\"Bash\">\n",
+		"<|DSML|parameter name=\"command\"><![CDATA[cat /Users/aq/Desktop/myproject/ds2api/package.json 2>/dev/null || echo \"No package.json found\"]]></|DSML|parameter>\n",
+		"<|DSML|parameter name=\"description\"><![CDATA[Check for existing package.json]]></|DSML|parameter>\n",
+		"</|DSML|invoke>\n",
+		"</|DSML|tool_calls>",
+	}
+	var events []Event
+	for _, c := range chunks {
+		events = append(events, ProcessChunk(&state, c, []string{"Bash"})...)
+	}
+	events = append(events, Flush(&state, []string{"Bash"})...)
+
+	var textContent strings.Builder
+	var toolCalls int
+	var names []string
+	for _, evt := range events {
+		textContent.WriteString(evt.Content)
+		for _, call := range evt.ToolCalls {
+			toolCalls++
+			names = append(names, call.Name)
+		}
+	}
+
+	if toolCalls != 2 {
+		t.Fatalf("expected two tool calls from fullwidth DSML prefix variant, got %d events=%#v", toolCalls, events)
+	}
+	if len(names) != 2 || names[0] != "Bash" || names[1] != "Bash" {
+		t.Fatalf("expected two Bash tool calls, got %v", names)
+	}
+	if textContent.Len() != 0 {
+		t.Fatalf("expected fullwidth DSML prefix variant not to leak text, got %q", textContent.String())
+	}
+}
+
 // Test <DSML|tool_calls> with <|DSML|invoke> (DSML prefix without leading pipe on wrapper).
 func TestProcessToolSieveDSMLPrefixVariantDoesNotLeak(t *testing.T) {
 	var state State

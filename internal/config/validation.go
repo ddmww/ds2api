@@ -39,9 +39,6 @@ func ValidateConfig(c Config) error {
 	if err := ValidateCurrentInputFileConfig(c.CurrentInputFile); err != nil {
 		return err
 	}
-	if c.HistorySplit.Enabled != nil && *c.HistorySplit.Enabled && c.CurrentInputFile.Enabled != nil && *c.CurrentInputFile.Enabled {
-		return fmt.Errorf("history_split.enabled and current_input_file.enabled cannot both be true")
-	}
 	if err := ValidateAccountProxyReferences(c.Accounts, c.Proxies); err != nil {
 		return err
 	}
@@ -187,9 +184,7 @@ func ValidateAutoDeleteConfig(autoDelete AutoDeleteConfig) error {
 
 func ValidateHistorySplitConfig(historySplit HistorySplitConfig) error {
 	if historySplit.TriggerAfterTurns != nil {
-		if err := ValidateIntRange("history_split.trigger_after_turns", *historySplit.TriggerAfterTurns, 1, 1000, true); err != nil {
-			return err
-		}
+		return ValidateIntRange("history_split.trigger_after_turns", *historySplit.TriggerAfterTurns, 1, 1000, true)
 	}
 	return nil
 }
