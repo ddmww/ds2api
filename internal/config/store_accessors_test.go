@@ -9,18 +9,18 @@ func TestStoreHistorySplitAccessors(t *testing.T) {
 		Enabled:           &enabled,
 		TriggerAfterTurns: &turns,
 	}}}
-	if store.HistorySplitEnabled() {
-		t.Fatal("expected history split to stay disabled")
+	if !store.HistorySplitEnabled() {
+		t.Fatal("expected history split enabled")
 	}
-	if got := store.HistorySplitTriggerAfterTurns(); got != 1 {
-		t.Fatalf("history split trigger_after_turns=%d want=1", got)
+	if got := store.HistorySplitTriggerAfterTurns(); got != 3 {
+		t.Fatalf("history split trigger_after_turns=%d want=3", got)
 	}
 }
 
 func TestStoreCurrentInputFileAccessors(t *testing.T) {
 	store := &Store{cfg: Config{}}
-	if !store.CurrentInputFileEnabled() {
-		t.Fatal("expected current input file enabled by default")
+	if store.CurrentInputFileEnabled() {
+		t.Fatal("expected current input file disabled by default")
 	}
 	if got := store.CurrentInputFileMinChars(); got != 0 {
 		t.Fatalf("default current input file min_chars=%d want=0", got)
@@ -44,7 +44,7 @@ func TestStoreCurrentInputFileAccessors(t *testing.T) {
 	historyEnabled := true
 	store.cfg.HistorySplit.Enabled = &historyEnabled
 	if !store.CurrentInputFileEnabled() {
-		t.Fatal("expected history split config to not suppress current input file mode")
+		t.Fatal("expected explicit current input file setting to win over history split")
 	}
 }
 

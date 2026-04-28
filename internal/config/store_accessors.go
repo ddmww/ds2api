@@ -212,11 +212,21 @@ func (s *Store) AutoDeleteSessions() bool {
 }
 
 func (s *Store) HistorySplitEnabled() bool {
-	return false
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.HistorySplit.Enabled == nil {
+		return false
+	}
+	return *s.cfg.HistorySplit.Enabled
 }
 
 func (s *Store) HistorySplitTriggerAfterTurns() int {
-	return 1
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.HistorySplit.TriggerAfterTurns == nil || *s.cfg.HistorySplit.TriggerAfterTurns <= 0 {
+		return 1
+	}
+	return *s.cfg.HistorySplit.TriggerAfterTurns
 }
 
 func (s *Store) HistorySplitUseFile() bool {
@@ -232,7 +242,7 @@ func (s *Store) CurrentInputFileEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.cfg.CurrentInputFile.Enabled == nil {
-		return true
+		return false
 	}
 	return *s.cfg.CurrentInputFile.Enabled
 }
