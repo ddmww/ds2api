@@ -3,17 +3,28 @@ package config
 import "testing"
 
 func TestStoreHistorySplitAccessors(t *testing.T) {
+	store := &Store{cfg: Config{}}
+	if !store.HistorySplitEnabled() {
+		t.Fatal("expected history split enabled by default")
+	}
+
 	enabled := true
 	turns := 3
-	store := &Store{cfg: Config{HistorySplit: HistorySplitConfig{
+	store.cfg.HistorySplit = HistorySplitConfig{
 		Enabled:           &enabled,
 		TriggerAfterTurns: &turns,
-	}}}
+	}
 	if !store.HistorySplitEnabled() {
 		t.Fatal("expected history split enabled")
 	}
 	if got := store.HistorySplitTriggerAfterTurns(); got != 3 {
 		t.Fatalf("history split trigger_after_turns=%d want=3", got)
+	}
+
+	enabled = false
+	store.cfg.HistorySplit.Enabled = &enabled
+	if !store.HistorySplitEnabled() {
+		t.Fatal("expected history split explicit false to be ignored")
 	}
 }
 

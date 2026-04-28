@@ -115,10 +115,6 @@ func splitOpenAIHistoryMessages(messages []any, triggerAfterTurns int) ([]any, [
 	return history.SplitOpenAIHistoryMessages(messages, triggerAfterTurns)
 }
 
-func buildOpenAICurrentInputContextTranscript(messages []any) string {
-	return promptcompat.BuildOpenAICurrentInputContextTranscript(messages)
-}
-
 func buildOpenAIHistoryTranscript(messages []any) string {
 	return promptcompat.BuildOpenAIHistoryTranscript(messages)
 }

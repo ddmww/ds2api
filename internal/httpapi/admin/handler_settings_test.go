@@ -57,6 +57,10 @@ func TestGetSettingsIncludesCurrentInputFileDefaults(t *testing.T) {
 	}
 	var body map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	historySplit, _ := body["history_split"].(map[string]any)
+	if got := boolFrom(historySplit["enabled"]); !got {
+		t.Fatalf("expected history_split.enabled=true by default, body=%v", body)
+	}
 	currentInputFile, _ := body["current_input_file"].(map[string]any)
 	if got := boolFrom(currentInputFile["enabled"]); got {
 		t.Fatalf("expected current_input_file.enabled=false by default, body=%v", body)
@@ -269,8 +273,8 @@ func TestUpdateSettingsCurrentInputFile(t *testing.T) {
 	if !h.Store.CurrentInputFileEnabled() {
 		t.Fatal("expected current input file accessor to stay enabled")
 	}
-	if h.Store.HistorySplitEnabled() {
-		t.Fatal("expected history split accessor to stay disabled")
+	if !h.Store.HistorySplitEnabled() {
+		t.Fatal("expected history split accessor to stay forced enabled")
 	}
 }
 

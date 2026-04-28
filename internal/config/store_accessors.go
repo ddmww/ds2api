@@ -214,10 +214,7 @@ func (s *Store) AutoDeleteSessions() bool {
 func (s *Store) HistorySplitEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.cfg.HistorySplit.Enabled == nil {
-		return false
-	}
-	return *s.cfg.HistorySplit.Enabled
+	return true
 }
 
 func (s *Store) HistorySplitTriggerAfterTurns() int {
