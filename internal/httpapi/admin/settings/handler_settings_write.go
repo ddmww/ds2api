@@ -52,6 +52,9 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 			if runtimeCfg.TokenRefreshIntervalHours > 0 {
 				c.Runtime.TokenRefreshIntervalHours = runtimeCfg.TokenRefreshIntervalHours
 			}
+			if runtimeCfg.TokenRefreshConcurrency > 0 {
+				c.Runtime.TokenRefreshConcurrency = runtimeCfg.TokenRefreshConcurrency
+			}
 		}
 		if compatCfg != nil {
 			if compatCfg.WideInputStrictOutput != nil {

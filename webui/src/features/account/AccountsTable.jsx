@@ -11,6 +11,7 @@ export default function AccountsTable({
     batchProgress,
     sessionCounts,
     deletingSessions,
+    deletingFailedAccounts,
     updatingProxy,
     totalAccounts,
     page,
@@ -19,6 +20,7 @@ export default function AccountsTable({
     resolveAccountIdentifier,
     proxies,
     onTestAll,
+    onDeleteFailedAccounts,
     onShowAddAccount,
     onEditAccount,
     onTestAccount,
@@ -62,6 +64,14 @@ export default function AccountsTable({
                     >
                         {testingAll ? <span className="animate-spin mr-2">⟳</span> : <Play className="w-3 h-3 mr-2" />}
                         {t('accountManager.testAll')}
+                    </button>
+                    <button
+                        onClick={onDeleteFailedAccounts}
+                        disabled={deletingFailedAccounts || totalAccounts === 0}
+                        className="flex items-center px-3 py-2 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors text-xs font-medium border border-destructive/20 disabled:opacity-50"
+                    >
+                        {deletingFailedAccounts ? <span className="animate-spin mr-2">⟳</span> : <Trash2 className="w-3 h-3 mr-2" />}
+                        {t('accountManager.deleteFailedAccounts')}
                     </button>
                     <button
                         onClick={onShowAddAccount}

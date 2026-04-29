@@ -162,6 +162,7 @@ type RuntimeConfig struct {
 	AccountMaxQueue           int `json:"account_max_queue,omitempty"`
 	GlobalMaxInflight         int `json:"global_max_inflight,omitempty"`
 	TokenRefreshIntervalHours int `json:"token_refresh_interval_hours,omitempty"`
+	TokenRefreshConcurrency   int `json:"token_refresh_concurrency,omitempty"`
 }
 
 type ResponsesConfig struct {

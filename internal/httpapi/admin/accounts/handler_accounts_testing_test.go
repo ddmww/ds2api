@@ -100,6 +100,36 @@ func TestTestAccount_BatchModeOnlyCreatesSession(t *testing.T) {
 	}
 }
 
+func TestTestAllAccountsUsesConfiguredRefreshConcurrency(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"runtime":{"token_refresh_concurrency":2},
+		"accounts":[
+			{"email":"a@example.com","password":"pwd"},
+			{"email":"b@example.com","password":"pwd"}
+		]
+	}`)
+	store := config.LoadStore()
+	h := &Handler{Store: store, DS: &testingDSMock{}}
+
+	req := httptest.NewRequest(http.MethodPost, "/accounts/test-all", bytes.NewBufferString(`{}`))
+	rec := httptest.NewRecorder()
+	h.testAllAccounts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got, _ := resp["concurrency"].(float64); got != 2 {
+		t.Fatalf("expected concurrency=2, got %#v", resp["concurrency"])
+	}
+	if got, _ := resp["success"].(float64); got != 2 {
+		t.Fatalf("expected success=2, got %#v", resp["success"])
+	}
+}
+
 func TestDeleteAllSessions_RetryWithReloginOnDeleteFailure(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{"accounts":[{"email":"batch@example.com","password":"pwd","token":"expired-token"}]}`)
 	store := config.LoadStore()

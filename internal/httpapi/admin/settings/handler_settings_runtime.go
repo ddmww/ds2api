@@ -17,6 +17,9 @@ func validateMergedRuntimeSettings(current config.RuntimeConfig, incoming *confi
 		if incoming.TokenRefreshIntervalHours > 0 {
 			merged.TokenRefreshIntervalHours = incoming.TokenRefreshIntervalHours
 		}
+		if incoming.TokenRefreshConcurrency > 0 {
+			merged.TokenRefreshConcurrency = incoming.TokenRefreshConcurrency
+		}
 	}
 	return validateRuntimeSettings(merged)
 }

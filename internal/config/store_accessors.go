@@ -207,6 +207,20 @@ func (s *Store) RuntimeTokenRefreshIntervalHours() int {
 	return 6
 }
 
+func (s *Store) RuntimeTokenRefreshConcurrency() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Runtime.TokenRefreshConcurrency > 0 {
+		return s.cfg.Runtime.TokenRefreshConcurrency
+	}
+	if raw := strings.TrimSpace(os.Getenv("DS2API_TOKEN_REFRESH_CONCURRENCY")); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 5
+}
+
 func (s *Store) AutoDeleteSessions() bool {
 	return s.AutoDeleteMode() != "none"
 }

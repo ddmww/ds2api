@@ -69,6 +69,13 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 			}
 			cfg.TokenRefreshIntervalHours = n
 		}
+		if v, exists := raw["token_refresh_concurrency"]; exists {
+			n := intFrom(v)
+			if err := config.ValidateIntRange("runtime.token_refresh_concurrency", n, 1, 256, true); err != nil {
+				return fail(err)
+			}
+			cfg.TokenRefreshConcurrency = n
+		}
 		if cfg.AccountMaxInflight > 0 && cfg.GlobalMaxInflight > 0 && cfg.GlobalMaxInflight < cfg.AccountMaxInflight {
 			return fail(fmt.Errorf("runtime.global_max_inflight must be >= runtime.account_max_inflight"))
 		}

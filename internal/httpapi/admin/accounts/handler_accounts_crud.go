@@ -174,3 +174,33 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	h.Pool.Reset()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
 }
+
+func (h *Handler) deleteFailedAccounts(w http.ResponseWriter, _ *http.Request) {
+	failed := map[string]struct{}{}
+	for _, acc := range h.Store.Snapshot().Accounts {
+		identifier := acc.Identifier()
+		if status, ok := h.Store.AccountTestStatus(identifier); ok && status == "failed" {
+			failed[identifier] = struct{}{}
+		}
+	}
+	if len(failed) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"success": true, "removed": 0, "total_accounts": len(h.Store.Snapshot().Accounts)})
+		return
+	}
+	if err := h.Store.Update(func(c *config.Config) error {
+		kept := c.Accounts[:0]
+		for _, acc := range c.Accounts {
+			if _, remove := failed[acc.Identifier()]; remove {
+				continue
+			}
+			kept = append(kept, acc)
+		}
+		c.Accounts = kept
+		return nil
+	}); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"detail": err.Error()})
+		return
+	}
+	h.Pool.Reset()
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "removed": len(failed), "total_accounts": len(h.Store.Snapshot().Accounts)})
+}

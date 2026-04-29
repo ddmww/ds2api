@@ -90,7 +90,8 @@
     "account_max_inflight": 2,
     "account_max_queue": 0,
     "global_max_inflight": 0,
-    "token_refresh_interval_hours": 6
+    "token_refresh_interval_hours": 6,
+    "token_refresh_concurrency": 5
   },
   "auto_delete": {
     "mode": "none"

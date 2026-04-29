@@ -16,6 +16,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, results: [] })
     const [sessionCounts, setSessionCounts] = useState({})
     const [deletingSessions, setDeletingSessions] = useState({})
+    const [deletingFailedAccounts, setDeletingFailedAccounts] = useState(false)
     const [updatingProxy, setUpdatingProxy] = useState({})
 
     const openAddKey = () => {
@@ -248,38 +249,54 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         setTestingAll(true)
         setBatchProgress({ current: 0, total: allAccounts.length, results: [] })
 
-        let successCount = 0
-        const results = []
-
-        for (let i = 0; i < allAccounts.length; i++) {
-            const acc = allAccounts[i]
-            const id = resolveAccountIdentifier(acc)
-            if (!id) {
-                results.push({ id: '-', success: false, message: t('accountManager.invalidIdentifier') })
-                setBatchProgress({ current: i + 1, total: allAccounts.length, results: [...results] })
-                continue
+        try {
+            const res = await apiFetch('/admin/accounts/test-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                onMessage('error', data.detail || t('messages.requestFailed'))
+                return
             }
-
-            try {
-                const res = await apiFetch('/admin/accounts/test', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ identifier: id }),
-                })
-                const data = await res.json()
-                results.push({ id, success: data.success, message: data.message, time: data.response_time })
-                if (data.success) successCount++
-            } catch (e) {
-                results.push({ id, success: false, message: e.message })
-            }
-
-            setBatchProgress({ current: i + 1, total: allAccounts.length, results: [...results] })
+            const results = Array.isArray(data.results)
+                ? data.results.map((item) => ({
+                    id: item.account || '-',
+                    success: Boolean(item.success),
+                    message: item.message || '',
+                    time: item.response_time,
+                }))
+                : []
+            setBatchProgress({ current: Number(data.total || allAccounts.length), total: Number(data.total || allAccounts.length), results })
+            onMessage('success', t('accountManager.testAllCompleted', { success: Number(data.success || 0), total: Number(data.total || allAccounts.length) }))
+            fetchAccounts()
+            onRefresh()
+        } catch (e) {
+            onMessage('error', t('accountManager.testFailed', { error: e.message }))
+        } finally {
+            setTestingAll(false)
         }
+    }
 
-        onMessage('success', t('accountManager.testAllCompleted', { success: successCount, total: allAccounts.length }))
-        fetchAccounts()
-        onRefresh()
-        setTestingAll(false)
+    const deleteFailedAccounts = async () => {
+        if (!confirm(t('accountManager.deleteFailedAccountsConfirm'))) return
+        setDeletingFailedAccounts(true)
+        try {
+            const res = await apiFetch('/admin/accounts/failed', { method: 'DELETE' })
+            const data = await res.json()
+            if (!res.ok) {
+                onMessage('error', data.detail || t('messages.deleteFailed'))
+                return
+            }
+            onMessage('success', t('accountManager.deleteFailedAccountsSuccess', { count: Number(data.removed || 0) }))
+            fetchAccounts()
+            onRefresh()
+        } catch (_e) {
+            onMessage('error', t('messages.networkError'))
+        } finally {
+            setDeletingFailedAccounts(false)
+        }
     }
 
     const deleteAllSessions = async (identifier) => {
@@ -372,6 +389,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         batchProgress,
         sessionCounts,
         deletingSessions,
+        deletingFailedAccounts,
         updatingProxy,
         addKey,
         deleteKey,
@@ -380,6 +398,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         deleteAccount,
         testAccount,
         testAllAccounts,
+        deleteFailedAccounts,
         deleteAllSessions,
         updateAccountProxy,
     }

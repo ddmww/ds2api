@@ -116,3 +116,43 @@ func TestListAccountsMasksTokenPreview(t *testing.T) {
 		t.Fatalf("expected masked token preview, got %q", got)
 	}
 }
+
+func TestDeleteFailedAccountsRemovesLastFailedOnly(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"accounts":[
+			{"email":"ok@example.com","password":"pwd"},
+			{"email":"bad@example.com","password":"pwd"},
+			{"email":"unknown@example.com","password":"pwd"}
+		]
+	}`)
+	if err := h.Store.UpdateAccountTestStatus("ok@example.com", "ok"); err != nil {
+		t.Fatalf("seed ok status: %v", err)
+	}
+	if err := h.Store.UpdateAccountTestStatus("bad@example.com", "failed"); err != nil {
+		t.Fatalf("seed failed status: %v", err)
+	}
+	router := chi.NewRouter()
+	RegisterRoutes(router, h)
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, adminReq(http.MethodDelete, "/accounts/failed", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got, _ := payload["removed"].(float64); got != 1 {
+		t.Fatalf("expected removed=1, got %#v", payload["removed"])
+	}
+	if _, ok := h.Store.FindAccount("bad@example.com"); ok {
+		t.Fatal("expected failed account to be removed")
+	}
+	if _, ok := h.Store.FindAccount("ok@example.com"); !ok {
+		t.Fatal("expected ok account to remain")
+	}
+	if _, ok := h.Store.FindAccount("unknown@example.com"); !ok {
+		t.Fatal("expected untested account to remain")
+	}
+}

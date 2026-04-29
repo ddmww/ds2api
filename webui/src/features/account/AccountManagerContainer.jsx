@@ -56,6 +56,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
         batchProgress,
         sessionCounts,
         deletingSessions,
+        deletingFailedAccounts,
         updatingProxy,
         addKey,
         deleteKey,
@@ -64,6 +65,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
         deleteAccount,
         testAccount,
         testAllAccounts,
+        deleteFailedAccounts,
         deleteAllSessions,
         updateAccountProxy,
     } = useAccountActions({
@@ -122,6 +124,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 batchProgress={batchProgress}
                 sessionCounts={sessionCounts}
                 deletingSessions={deletingSessions}
+                deletingFailedAccounts={deletingFailedAccounts}
                 updatingProxy={updatingProxy}
                 totalAccounts={totalAccounts}
                 page={page}
@@ -130,6 +133,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 resolveAccountIdentifier={resolveAccountIdentifier}
                 proxies={config?.proxies || []}
                 onTestAll={testAllAccounts}
+                onDeleteFailedAccounts={deleteFailedAccounts}
                 onShowAddAccount={openAddAccount}
                 onEditAccount={openEditAccount}
                 onTestAccount={testAccount}

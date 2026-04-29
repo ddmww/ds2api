@@ -61,8 +61,7 @@ func (h *Handler) testAllAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Concurrent testing with a semaphore to limit parallelism.
-	const maxConcurrency = 5
+	maxConcurrency := h.Store.RuntimeTokenRefreshConcurrency()
 	results := runAccountTestsConcurrently(accounts, maxConcurrency, func(_ int, account config.Account) map[string]any {
 		return h.testAccount(r.Context(), account, model, "")
 	})
@@ -73,7 +72,7 @@ func (h *Handler) testAllAccounts(w http.ResponseWriter, r *http.Request) {
 			success++
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"total": len(accounts), "success": success, "failed": len(accounts) - success, "results": results})
+	writeJSON(w, http.StatusOK, map[string]any{"total": len(accounts), "success": success, "failed": len(accounts) - success, "concurrency": maxConcurrency, "results": results})
 }
 
 func runAccountTestsConcurrently(accounts []config.Account, maxConcurrency int, testFn func(int, config.Account) map[string]any) []map[string]any {
