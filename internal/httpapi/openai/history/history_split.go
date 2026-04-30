@@ -27,6 +27,11 @@ func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptco
 	if s.Store == nil || !s.Store.HistorySplitEnabled() {
 		return stdReq, nil
 	}
+	fullContextPromptTokens := stdReq.EstimatedPromptTokens
+	if fullContextPromptTokens <= 0 {
+		stdReq.RefreshEstimatedPromptTokens()
+		fullContextPromptTokens = stdReq.EstimatedPromptTokens
+	}
 	useFile := s.Store.HistorySplitUseFile()
 	if useFile && (s.DS == nil || a == nil) {
 		return stdReq, nil
@@ -73,6 +78,9 @@ func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptco
 	stdReq.RefFileIDs = prependUniqueRefFileID(stdReq.RefFileIDs, fileID)
 	stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPrompt(promptMessages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
 	stdReq.RefreshEstimatedPromptTokens()
+	if fullContextPromptTokens > 0 {
+		stdReq.EstimatedPromptTokens = fullContextPromptTokens
+	}
 	return stdReq, nil
 }
 

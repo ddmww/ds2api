@@ -22,6 +22,11 @@ func (s Service) ApplyCurrentInputFile(ctx context.Context, a *auth.RequestAuth,
 	if s.DS == nil || s.Store == nil || a == nil || !s.Store.CurrentInputFileEnabled() {
 		return stdReq, nil
 	}
+	fullContextPromptTokens := stdReq.EstimatedPromptTokens
+	if fullContextPromptTokens <= 0 {
+		stdReq.RefreshEstimatedPromptTokens()
+		fullContextPromptTokens = stdReq.EstimatedPromptTokens
+	}
 	threshold := s.Store.CurrentInputFileMinChars()
 
 	index, _ := latestUserInputForFile(stdReq.Messages)
@@ -62,6 +67,9 @@ func (s Service) ApplyCurrentInputFile(ctx context.Context, a *auth.RequestAuth,
 	stdReq.RefFileIDs = prependUniqueRefFileID(stdReq.RefFileIDs, fileID)
 	stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPrompt(messages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
 	stdReq.RefreshEstimatedPromptTokens()
+	if fullContextPromptTokens > 0 {
+		stdReq.EstimatedPromptTokens = fullContextPromptTokens
+	}
 	return stdReq, nil
 }
 

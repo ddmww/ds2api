@@ -14,6 +14,7 @@ import (
 	"ds2api/internal/auth"
 	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/util"
 )
 
 func historySplitTestMessages() []any {
@@ -307,6 +308,10 @@ func TestApplyCurrentInputFileUploadsFirstTurnWithInjectedWrapper(t *testing.T) 
 	if len(out.RefFileIDs) != 1 || out.RefFileIDs[0] != "file-inline-1" {
 		t.Fatalf("expected current input file id in ref_file_ids, got %#v", out.RefFileIDs)
 	}
+	livePromptTokens := util.EstimateOpenAIRequestTokensWithFallback(out.ResponseModel, out.Messages, out.ToolsRaw, out.FinalPrompt)
+	if out.EstimatedPromptTokens <= livePromptTokens {
+		t.Fatalf("expected token estimate to preserve full uploaded context, got estimate=%d live_prompt=%d", out.EstimatedPromptTokens, livePromptTokens)
+	}
 }
 
 func TestApplyCurrentInputFileReplacesHistorySplitWithFullContextFile(t *testing.T) {
@@ -360,6 +365,10 @@ func TestApplyCurrentInputFileReplacesHistorySplitWithFullContextFile(t *testing
 	if !strings.Contains(out.FinalPrompt, "Answer the latest user request directly.") {
 		t.Fatalf("expected neutral continuation instruction in live prompt, got %s", out.FinalPrompt)
 	}
+	livePromptTokens := util.EstimateOpenAIRequestTokensWithFallback(out.ResponseModel, out.Messages, out.ToolsRaw, out.FinalPrompt)
+	if out.EstimatedPromptTokens <= livePromptTokens {
+		t.Fatalf("expected token estimate to preserve full uploaded context, got estimate=%d live_prompt=%d", out.EstimatedPromptTokens, livePromptTokens)
+	}
 }
 
 func TestApplyHistorySplitCarriesHistoryText(t *testing.T) {
@@ -390,6 +399,10 @@ func TestApplyHistorySplitCarriesHistoryText(t *testing.T) {
 	}
 	if out.HistoryText != string(ds.uploadCalls[0].Data) {
 		t.Fatalf("expected history text to be preserved on normalized request")
+	}
+	livePromptTokens := util.EstimateOpenAIRequestTokensWithFallback(out.ResponseModel, out.Messages, out.ToolsRaw, out.FinalPrompt)
+	if out.EstimatedPromptTokens != stdReq.EstimatedPromptTokens || out.EstimatedPromptTokens <= livePromptTokens {
+		t.Fatalf("expected token estimate to preserve pre-split full context, before=%d after=%d live_prompt=%d", stdReq.EstimatedPromptTokens, out.EstimatedPromptTokens, livePromptTokens)
 	}
 }
 
