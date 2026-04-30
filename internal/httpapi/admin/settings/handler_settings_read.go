@@ -49,6 +49,10 @@ func (h *Handler) getSettings(w http.ResponseWriter, _ *http.Request) {
 			"prompt":         h.Store.ThinkingInjectionPrompt(),
 			"default_prompt": promptcompat.DefaultThinkingInjectionPrompt,
 		},
+		"empty_output_retry": map[string]any{
+			"enabled":      h.Store.EmptyOutputRetryEnabled(),
+			"max_attempts": h.Store.EmptyOutputRetryMaxAttempts(),
+		},
 		"model_aliases":     snap.ModelAliases,
 		"env_backed":        h.Store.IsEnvBacked(),
 		"needs_vercel_sync": needsSync,

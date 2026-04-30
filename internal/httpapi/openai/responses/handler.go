@@ -117,12 +117,12 @@ func writeUpstreamEmptyOutputError(w http.ResponseWriter, text, thinking string,
 	return shared.WriteUpstreamEmptyOutputError(w, text, thinking, contentFilter)
 }
 
-func emptyOutputRetryEnabled() bool {
-	return shared.EmptyOutputRetryEnabled()
+func emptyOutputRetryEnabled(store shared.ConfigReader) bool {
+	return shared.EmptyOutputRetryEnabledForStore(store)
 }
 
-func emptyOutputRetryMaxAttempts() int {
-	return shared.EmptyOutputRetryMaxAttempts()
+func emptyOutputRetryMaxAttempts(store shared.ConfigReader) int {
+	return shared.EmptyOutputRetryMaxAttemptsForStore(store)
 }
 
 func clonePayloadForEmptyOutputRetry(payload map[string]any, parentMessageID int) map[string]any {

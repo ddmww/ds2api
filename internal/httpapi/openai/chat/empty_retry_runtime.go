@@ -45,7 +45,7 @@ func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Co
 		result.detectedCalls = len(detected.Calls)
 		result.body = openaifmt.BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, promptTokens, usagePrompt, result.thinking, result.text, detected.Calls, toolsRaw)
 		result.finishReason = chatFinishReason(result.body)
-		if !shouldRetryChatNonStream(result, attempts) {
+		if !h.shouldRetryChatNonStream(result, attempts) {
 			h.finishChatNonStreamResult(w, result, attempts, historySession)
 			return
 		}
@@ -132,9 +132,9 @@ func chatFinishReason(respBody map[string]any) string {
 	return "stop"
 }
 
-func shouldRetryChatNonStream(result chatNonStreamResult, attempts int) bool {
-	return emptyOutputRetryEnabled() &&
-		attempts < emptyOutputRetryMaxAttempts() &&
+func (h *Handler) shouldRetryChatNonStream(result chatNonStreamResult, attempts int) bool {
+	return emptyOutputRetryEnabled(h.Store) &&
+		attempts < emptyOutputRetryMaxAttempts(h.Store) &&
 		!result.contentFilter &&
 		result.detectedCalls == 0 &&
 		strings.TrimSpace(result.text) == ""
@@ -148,12 +148,12 @@ func (h *Handler) handleStreamWithRetry(w http.ResponseWriter, r *http.Request, 
 	attempts := 0
 	currentResp := resp
 	for {
-		terminalWritten, retryable := h.consumeChatStreamAttempt(r, currentResp, streamRuntime, initialType, thinkingEnabled, historySession, attempts < emptyOutputRetryMaxAttempts())
+		terminalWritten, retryable := h.consumeChatStreamAttempt(r, currentResp, streamRuntime, initialType, thinkingEnabled, historySession, attempts < emptyOutputRetryMaxAttempts(h.Store))
 		if terminalWritten {
 			logChatStreamTerminal(streamRuntime, attempts)
 			return
 		}
-		if !retryable || !emptyOutputRetryEnabled() || attempts >= emptyOutputRetryMaxAttempts() {
+		if !retryable || !emptyOutputRetryEnabled(h.Store) || attempts >= emptyOutputRetryMaxAttempts(h.Store) {
 			streamRuntime.finalize("stop", false)
 			recordChatStreamHistory(streamRuntime, historySession)
 			config.Logger.Info("[openai_empty_retry] terminal empty output", "surface", "chat.completions", "stream", true, "retry_attempts", attempts, "success_source", "none")

@@ -39,6 +39,9 @@ func ValidateConfig(c Config) error {
 	if err := ValidateCurrentInputFileConfig(c.CurrentInputFile); err != nil {
 		return err
 	}
+	if err := ValidateEmptyOutputRetryConfig(c.EmptyOutputRetry); err != nil {
+		return err
+	}
 	if err := ValidateAccountProxyReferences(c.Accounts, c.Proxies); err != nil {
 		return err
 	}
@@ -195,6 +198,13 @@ func ValidateHistorySplitConfig(historySplit HistorySplitConfig) error {
 func ValidateCurrentInputFileConfig(currentInputFile CurrentInputFileConfig) error {
 	if currentInputFile.MinChars != 0 {
 		return ValidateIntRange("current_input_file.min_chars", currentInputFile.MinChars, 1, 100000000, true)
+	}
+	return nil
+}
+
+func ValidateEmptyOutputRetryConfig(emptyOutputRetry EmptyOutputRetryConfig) error {
+	if emptyOutputRetry.MaxAttempts != nil {
+		return ValidateIntRange("empty_output_retry.max_attempts", *emptyOutputRetry.MaxAttempts, 0, 8, true)
 	}
 	return nil
 }

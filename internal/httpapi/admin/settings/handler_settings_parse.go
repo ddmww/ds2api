@@ -273,3 +273,26 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 
 	return adminCfg, runtimeCfg, compatCfg, respCfg, embCfg, visionCfg, blockerCfg, truncationCfg, autoDeleteCfg, historySplitCfg, currentInputCfg, thinkingInjCfg, aliasMap, nil
 }
+
+func parseEmptyOutputRetryUpdate(req map[string]any) (*config.EmptyOutputRetryConfig, error) {
+	raw, ok := req["empty_output_retry"].(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+	cfg := &config.EmptyOutputRetryConfig{}
+	if v, exists := raw["enabled"]; exists {
+		b := boolFrom(v)
+		cfg.Enabled = &b
+	}
+	if v, exists := raw["max_attempts"]; exists {
+		n := intFrom(v)
+		if err := config.ValidateIntRange("empty_output_retry.max_attempts", n, 0, 8, true); err != nil {
+			return nil, err
+		}
+		cfg.MaxAttempts = &n
+	}
+	if err := config.ValidateEmptyOutputRetryConfig(*cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}

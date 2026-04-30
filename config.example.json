@@ -64,6 +64,10 @@
     "enabled": true,
     "prompt": ""
   },
+  "empty_output_retry": {
+    "enabled": true,
+    "max_attempts": 1
+  },
   "embeddings": {
     "provider": "deterministic"
   },

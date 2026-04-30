@@ -70,7 +70,9 @@ func (m mockOpenAIConfig) ThinkingInjectionEnabled() bool {
 	}
 	return *m.thinkingInjection
 }
-func (m mockOpenAIConfig) ThinkingInjectionPrompt() string { return m.thinkingPrompt }
+func (m mockOpenAIConfig) ThinkingInjectionPrompt() string  { return m.thinkingPrompt }
+func (m mockOpenAIConfig) EmptyOutputRetryEnabled() bool    { return true }
+func (m mockOpenAIConfig) EmptyOutputRetryMaxAttempts() int { return 1 }
 
 type streamStatusAuthStub struct{}
 

@@ -22,6 +22,11 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
 	}
+	emptyOutputRetryCfg, err := parseEmptyOutputRetryUpdate(req)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
+		return
+	}
 	if runtimeCfg != nil {
 		if err := validateMergedRuntimeSettings(h.Store.Snapshot().Runtime, runtimeCfg); err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
@@ -32,6 +37,7 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 	currentInputMinCharsSet := hasNestedSettingsKey(req, "current_input_file", "min_chars")
 	thinkingInjectionEnabledSet := hasNestedSettingsKey(req, "thinking_injection", "enabled")
 	thinkingInjectionPromptSet := hasNestedSettingsKey(req, "thinking_injection", "prompt")
+	emptyOutputRetryMaxAttemptsSet := hasNestedSettingsKey(req, "empty_output_retry", "max_attempts")
 
 	if err := h.Store.Update(func(c *config.Config) error {
 		if adminCfg != nil {
@@ -119,6 +125,14 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 			}
 			if thinkingInjectionPromptSet {
 				c.ThinkingInjection.Prompt = thinkingInjCfg.Prompt
+			}
+		}
+		if emptyOutputRetryCfg != nil {
+			if emptyOutputRetryCfg.Enabled != nil {
+				c.EmptyOutputRetry.Enabled = emptyOutputRetryCfg.Enabled
+			}
+			if emptyOutputRetryMaxAttemptsSet {
+				c.EmptyOutputRetry.MaxAttempts = emptyOutputRetryCfg.MaxAttempts
 			}
 		}
 		if aliasMap != nil {

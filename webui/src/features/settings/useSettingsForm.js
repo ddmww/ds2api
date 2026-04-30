@@ -39,6 +39,7 @@ const DEFAULT_FORM = {
     history_split: { enabled: true, trigger_after_turns: 1, use_file: true },
     current_input_file: { enabled: false, min_chars: 0 },
     thinking_injection: { enabled: true, prompt: '', default_prompt: '' },
+    empty_output_retry: { enabled: true, max_attempts: 1 },
     model_aliases_text: '{}',
 }
 
@@ -130,6 +131,10 @@ function fromServerForm(data) {
             prompt: data.thinking_injection?.prompt || '',
             default_prompt: data.thinking_injection?.default_prompt || '',
         },
+        empty_output_retry: {
+            enabled: data.empty_output_retry?.enabled ?? true,
+            max_attempts: Number(data.empty_output_retry?.max_attempts ?? 1),
+        },
         model_aliases_text: JSON.stringify(data.model_aliases || {}, null, 2),
     }
 }
@@ -187,6 +192,10 @@ function toServerPayload(form) {
         thinking_injection: {
             enabled: Boolean(form.thinking_injection?.enabled ?? true),
             prompt: String(form.thinking_injection?.prompt || '').trim(),
+        },
+        empty_output_retry: {
+            enabled: Boolean(form.empty_output_retry?.enabled ?? true),
+            max_attempts: Number(form.empty_output_retry?.max_attempts ?? 1),
         },
     }
 }

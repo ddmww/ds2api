@@ -8,8 +8,22 @@ func EmptyOutputRetryEnabled() bool {
 	return true
 }
 
+func EmptyOutputRetryEnabledForStore(store ConfigReader) bool {
+	if store == nil {
+		return EmptyOutputRetryEnabled()
+	}
+	return store.EmptyOutputRetryEnabled()
+}
+
 func EmptyOutputRetryMaxAttempts() int {
 	return 1
+}
+
+func EmptyOutputRetryMaxAttemptsForStore(store ConfigReader) int {
+	if store == nil {
+		return EmptyOutputRetryMaxAttempts()
+	}
+	return store.EmptyOutputRetryMaxAttempts()
 }
 
 func ClonePayloadWithEmptyOutputRetryPrompt(payload map[string]any) map[string]any {

@@ -63,6 +63,43 @@ export default function BehaviorSection({ t, form, setForm }) {
                     />
                     <p className="text-xs text-muted-foreground">{t('settings.thinkingInjectionPromptHelp')}</p>
                 </label>
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px] gap-4 rounded-lg border border-border bg-background/60 p-4">
+                    <label className="flex items-start gap-3">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(form.empty_output_retry?.enabled ?? true)}
+                            onChange={(e) => setForm((prev) => ({
+                                ...prev,
+                                empty_output_retry: {
+                                    ...prev.empty_output_retry,
+                                    enabled: e.target.checked,
+                                },
+                            }))}
+                            className="mt-1 h-4 w-4 rounded border-border"
+                        />
+                        <div className="space-y-1">
+                            <span className="text-sm font-medium block">{t('settings.emptyOutputRetryEnabled')}</span>
+                            <span className="text-xs text-muted-foreground block">{t('settings.emptyOutputRetryDesc')}</span>
+                        </div>
+                    </label>
+                    <label className="text-sm space-y-2">
+                        <span className="text-muted-foreground">{t('settings.emptyOutputRetryMaxAttempts')}</span>
+                        <input
+                            type="number"
+                            min={0}
+                            max={8}
+                            value={form.empty_output_retry?.max_attempts ?? 1}
+                            onChange={(e) => setForm((prev) => ({
+                                ...prev,
+                                empty_output_retry: {
+                                    ...prev.empty_output_retry,
+                                    max_attempts: Number(e.target.value || 0),
+                                },
+                            }))}
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2"
+                        />
+                    </label>
+                </div>
             </div>
             <div className="border-t border-border pt-4 space-y-4">
                 <div className="flex items-center justify-between gap-4">

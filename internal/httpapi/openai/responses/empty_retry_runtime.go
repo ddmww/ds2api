@@ -45,7 +45,7 @@ func (h *Handler) handleResponsesNonStreamWithRetry(w http.ResponseWriter, ctx c
 		result.parsed = detectAssistantToolCalls(result.text, result.thinking, result.toolDetectionThinking, toolNames)
 		result.body = openaifmt.BuildResponseObjectWithToolCallsAndPromptTokens(responseID, model, promptTokens, usagePrompt, result.thinking, result.text, result.parsed.Calls, toolsRaw)
 
-		if !shouldRetryResponsesNonStream(result, attempts) {
+		if !h.shouldRetryResponsesNonStream(result, attempts) {
 			h.finishResponsesNonStreamResult(w, result, attempts, owner, responseID, toolChoice, traceID)
 			return
 		}
@@ -115,9 +115,9 @@ func (h *Handler) finishResponsesNonStreamResult(w http.ResponseWriter, result r
 	config.Logger.Info("[openai_empty_retry] completed", "surface", "responses", "stream", false, "retry_attempts", attempts, "success_source", source)
 }
 
-func shouldRetryResponsesNonStream(result responsesNonStreamResult, attempts int) bool {
-	return emptyOutputRetryEnabled() &&
-		attempts < emptyOutputRetryMaxAttempts() &&
+func (h *Handler) shouldRetryResponsesNonStream(result responsesNonStreamResult, attempts int) bool {
+	return emptyOutputRetryEnabled(h.Store) &&
+		attempts < emptyOutputRetryMaxAttempts(h.Store) &&
 		!result.contentFilter &&
 		len(result.parsed.Calls) == 0 &&
 		strings.TrimSpace(result.text) == ""
@@ -131,12 +131,12 @@ func (h *Handler) handleResponsesStreamWithRetry(w http.ResponseWriter, r *http.
 	attempts := 0
 	currentResp := resp
 	for {
-		terminalWritten, retryable := h.consumeResponsesStreamAttempt(r, currentResp, streamRuntime, initialType, thinkingEnabled, attempts < emptyOutputRetryMaxAttempts())
+		terminalWritten, retryable := h.consumeResponsesStreamAttempt(r, currentResp, streamRuntime, initialType, thinkingEnabled, attempts < emptyOutputRetryMaxAttempts(h.Store))
 		if terminalWritten {
 			logResponsesStreamTerminal(streamRuntime, attempts)
 			return
 		}
-		if !retryable || !emptyOutputRetryEnabled() || attempts >= emptyOutputRetryMaxAttempts() {
+		if !retryable || !emptyOutputRetryEnabled(h.Store) || attempts >= emptyOutputRetryMaxAttempts(h.Store) {
 			streamRuntime.finalize("stop", false)
 			config.Logger.Info("[openai_empty_retry] terminal empty output", "surface", "responses", "stream", true, "retry_attempts", attempts, "success_source", "none", "error_code", streamRuntime.finalErrorCode)
 			return

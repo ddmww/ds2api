@@ -278,3 +278,28 @@ func (s *Store) ThinkingInjectionPrompt() string {
 	defer s.mu.RUnlock()
 	return strings.TrimSpace(s.cfg.ThinkingInjection.Prompt)
 }
+
+func (s *Store) EmptyOutputRetryEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.EmptyOutputRetry.Enabled == nil {
+		return true
+	}
+	return *s.cfg.EmptyOutputRetry.Enabled
+}
+
+func (s *Store) EmptyOutputRetryMaxAttempts() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.EmptyOutputRetry.MaxAttempts == nil {
+		return 1
+	}
+	maxAttempts := *s.cfg.EmptyOutputRetry.MaxAttempts
+	if maxAttempts < 0 {
+		return 0
+	}
+	if maxAttempts > 8 {
+		return 8
+	}
+	return maxAttempts
+}
