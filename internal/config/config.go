@@ -183,10 +183,11 @@ type VisionConfig struct {
 }
 
 type UpstreamBlockerConfig struct {
-	Enabled       bool     `json:"enabled,omitempty"`
-	CaseSensitive bool     `json:"case_sensitive,omitempty"`
-	Keywords      []string `json:"keywords,omitempty"`
-	Message       string   `json:"message,omitempty"`
+	Enabled            bool     `json:"enabled,omitempty"`
+	CaseSensitive      bool     `json:"case_sensitive,omitempty"`
+	Keywords           []string `json:"keywords,omitempty"`
+	Message            string   `json:"message,omitempty"`
+	StreamBufferTokens int      `json:"stream_buffer_tokens,omitempty"`
 }
 
 type TruncationConfig struct {

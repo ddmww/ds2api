@@ -31,9 +31,10 @@ func (e *MatchError) StatusCode() int {
 
 func Normalize(cfg config.UpstreamBlockerConfig) config.UpstreamBlockerConfig {
 	out := config.UpstreamBlockerConfig{
-		Enabled:       cfg.Enabled,
-		CaseSensitive: cfg.CaseSensitive,
-		Message:       strings.TrimSpace(cfg.Message),
+		Enabled:            cfg.Enabled,
+		CaseSensitive:      cfg.CaseSensitive,
+		Message:            strings.TrimSpace(cfg.Message),
+		StreamBufferTokens: cfg.StreamBufferTokens,
 	}
 	if out.Message == "" {
 		out.Message = DefaultMessage

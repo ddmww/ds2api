@@ -117,6 +117,18 @@ func writeUpstreamEmptyOutputError(w http.ResponseWriter, text, thinking string,
 	return shared.WriteUpstreamEmptyOutputError(w, text, thinking, contentFilter)
 }
 
+func streamUpstreamBlockerBufferTokens(store shared.ConfigReader) int {
+	return shared.StreamUpstreamBlockerBufferTokens(store)
+}
+
+func estimateStreamBlockerTokens(model, candidate string) int {
+	return shared.EstimateStreamBlockerTokens(model, candidate)
+}
+
+func assertUpstreamAllowed(store shared.ConfigReader, candidate string) error {
+	return shared.AssertUpstreamAllowed(store, candidate)
+}
+
 func emptyOutputRetryEnabled(store shared.ConfigReader) bool {
 	return shared.EmptyOutputRetryEnabledForStore(store)
 }

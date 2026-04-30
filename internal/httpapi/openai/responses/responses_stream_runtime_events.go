@@ -13,6 +13,14 @@ func (s *responsesStreamRuntime) nextSequence() int {
 }
 
 func (s *responsesStreamRuntime) sendEvent(event string, payload map[string]any) {
+	if s.shouldBufferForUpstreamBlocker() {
+		s.streamBlockerEvents = append(s.streamBlockerEvents, responsesBufferedEvent{event: event, payload: payload})
+		return
+	}
+	s.sendEventDirect(event, payload)
+}
+
+func (s *responsesStreamRuntime) sendEventDirect(event string, payload map[string]any) {
 	if payload == nil {
 		payload = map[string]any{}
 	}

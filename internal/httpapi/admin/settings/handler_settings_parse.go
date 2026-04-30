@@ -160,6 +160,13 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 		if v, exists := raw["message"]; exists {
 			cfg.Message = strings.TrimSpace(fmt.Sprintf("%v", v))
 		}
+		if v, exists := raw["stream_buffer_tokens"]; exists {
+			n := intFrom(v)
+			if err := config.ValidateIntRange("upstream_blocker.stream_buffer_tokens", n, 0, 100000, true); err != nil {
+				return fail(err)
+			}
+			cfg.StreamBufferTokens = n
+		}
 		if err := config.ValidateUpstreamBlockerConfig(*cfg); err != nil {
 			return fail(err)
 		}

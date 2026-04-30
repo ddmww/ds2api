@@ -251,6 +251,8 @@ func (h *Handler) handleStreamWithPromptTokens(w http.ResponseWriter, r *http.Re
 		toolsRaw,
 		bufferToolContent,
 		emitEarlyToolDeltas,
+		h.Store,
+		streamUpstreamBlockerBufferTokens(h.Store),
 	)
 	streamRuntime.sendInitialRoleChunk()
 

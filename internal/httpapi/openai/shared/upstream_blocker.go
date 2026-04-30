@@ -5,6 +5,7 @@ import (
 
 	"ds2api/internal/config"
 	"ds2api/internal/upstreamblocker"
+	"ds2api/internal/util"
 )
 
 type upstreamBlockerConfigReader interface {
@@ -21,6 +22,18 @@ func UpstreamBlockerConfig(store ConfigReader) config.UpstreamBlockerConfig {
 
 func AssertUpstreamAllowed(store ConfigReader, candidate string) error {
 	return upstreamblocker.AssertAllowed(UpstreamBlockerConfig(store), candidate)
+}
+
+func StreamUpstreamBlockerBufferTokens(store ConfigReader) int {
+	cfg := UpstreamBlockerConfig(store)
+	if !cfg.Enabled || cfg.StreamBufferTokens <= 0 {
+		return 0
+	}
+	return cfg.StreamBufferTokens
+}
+
+func EstimateStreamBlockerTokens(model, candidate string) int {
+	return util.EstimateTokensByModel(model, candidate)
 }
 
 func WriteUpstreamBlockedError(w http.ResponseWriter, err error) bool {

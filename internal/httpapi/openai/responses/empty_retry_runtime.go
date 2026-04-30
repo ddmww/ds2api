@@ -189,6 +189,7 @@ func (h *Handler) prepareResponsesStreamRuntime(w http.ResponseWriter, resp *htt
 		toolChoice, traceID, func(obj map[string]any) {
 			h.getResponseStore().put(owner, responseID, obj)
 		},
+		h.Store, streamUpstreamBlockerBufferTokens(h.Store),
 	)
 	streamRuntime.sendCreated()
 	return streamRuntime, initialType, true

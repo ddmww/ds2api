@@ -79,7 +79,8 @@
       "我无法",
       "拒绝此请求"
     ],
-    "message": "上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。"
+    "message": "上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。",
+    "stream_buffer_tokens": 0
   },
   "truncation_auto_continue": {
     "enabled": true,

@@ -208,6 +208,8 @@ func (h *Handler) handleResponsesStreamWithPromptTokens(w http.ResponseWriter, r
 		func(obj map[string]any) {
 			h.getResponseStore().put(owner, responseID, obj)
 		},
+		h.Store,
+		streamUpstreamBlockerBufferTokens(h.Store),
 	)
 	streamRuntime.sendCreated()
 

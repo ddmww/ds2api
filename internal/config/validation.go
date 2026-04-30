@@ -157,6 +157,9 @@ func ValidateUpstreamBlockerConfig(blocker UpstreamBlockerConfig) error {
 	if err := ValidateTrimmedString("upstream_blocker.message", blocker.Message, false); err != nil {
 		return err
 	}
+	if err := ValidateIntRange("upstream_blocker.stream_buffer_tokens", blocker.StreamBufferTokens, 0, 100000, false); err != nil {
+		return err
+	}
 	seen := map[string]struct{}{}
 	count := 0
 	for _, keyword := range blocker.Keywords {

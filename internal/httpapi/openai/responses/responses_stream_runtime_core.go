@@ -1,16 +1,18 @@
 package responses
 
 import (
-	"ds2api/internal/toolcall"
 	"net/http"
 	"strings"
 
 	"ds2api/internal/config"
 	openaifmt "ds2api/internal/format/openai"
+	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
+	"ds2api/internal/toolcall"
 	"ds2api/internal/toolstream"
+	"ds2api/internal/upstreamblocker"
 )
 
 type responsesStreamRuntime struct {
@@ -63,6 +65,17 @@ type responsesStreamRuntime struct {
 	finalErrorCode        string
 
 	persistResponse func(obj map[string]any)
+
+	store                     shared.ConfigReader
+	streamBlockerBufferTokens int
+	streamBlockerReleased     bool
+	streamBlockerBlocked      bool
+	streamBlockerEvents       []responsesBufferedEvent
+}
+
+type responsesBufferedEvent struct {
+	event   string
+	payload map[string]any
 }
 
 func newResponsesStreamRuntime(
@@ -83,33 +96,37 @@ func newResponsesStreamRuntime(
 	toolChoice promptcompat.ToolChoicePolicy,
 	traceID string,
 	persistResponse func(obj map[string]any),
+	store shared.ConfigReader,
+	streamBlockerBufferTokens int,
 ) *responsesStreamRuntime {
 	return &responsesStreamRuntime{
-		w:                     w,
-		rc:                    rc,
-		canFlush:              canFlush,
-		responseID:            responseID,
-		model:                 model,
-		promptTokens:          promptTokens,
-		finalPrompt:           finalPrompt,
-		thinkingEnabled:       thinkingEnabled,
-		searchEnabled:         searchEnabled,
-		stripReferenceMarkers: stripReferenceMarkers,
-		toolNames:             toolNames,
-		toolsRaw:              toolsRaw,
-		bufferToolContent:     bufferToolContent,
-		emitEarlyToolDeltas:   emitEarlyToolDeltas,
-		streamToolCallIDs:     map[int]string{},
-		functionItemIDs:       map[int]string{},
-		functionOutputIDs:     map[int]int{},
-		functionArgs:          map[int]string{},
-		functionDone:          map[int]bool{},
-		functionAdded:         map[int]bool{},
-		functionNames:         map[int]string{},
-		messageOutputID:       -1,
-		toolChoice:            toolChoice,
-		traceID:               traceID,
-		persistResponse:       persistResponse,
+		w:                         w,
+		rc:                        rc,
+		canFlush:                  canFlush,
+		responseID:                responseID,
+		model:                     model,
+		promptTokens:              promptTokens,
+		finalPrompt:               finalPrompt,
+		thinkingEnabled:           thinkingEnabled,
+		searchEnabled:             searchEnabled,
+		stripReferenceMarkers:     stripReferenceMarkers,
+		toolNames:                 toolNames,
+		toolsRaw:                  toolsRaw,
+		bufferToolContent:         bufferToolContent,
+		emitEarlyToolDeltas:       emitEarlyToolDeltas,
+		streamToolCallIDs:         map[int]string{},
+		functionItemIDs:           map[int]string{},
+		functionOutputIDs:         map[int]int{},
+		functionArgs:              map[int]string{},
+		functionDone:              map[int]bool{},
+		functionAdded:             map[int]bool{},
+		functionNames:             map[int]string{},
+		messageOutputID:           -1,
+		toolChoice:                toolChoice,
+		traceID:                   traceID,
+		persistResponse:           persistResponse,
+		store:                     store,
+		streamBlockerBufferTokens: streamBlockerBufferTokens,
 	}
 }
 
@@ -137,11 +154,17 @@ func (s *responsesStreamRuntime) failResponse(status int, message, code string) 
 	if s.persistResponse != nil {
 		s.persistResponse(failedResp)
 	}
-	s.sendEvent("response.failed", openaifmt.BuildResponsesFailedPayload(s.responseID, s.model, status, message, code))
+	s.streamBlockerBlocked = true
+	s.streamBlockerReleased = true
+	s.streamBlockerEvents = nil
+	s.sendEventDirect("response.failed", openaifmt.BuildResponsesFailedPayload(s.responseID, s.model, status, message, code))
 	s.sendDone()
 }
 
 func (s *responsesStreamRuntime) finalize(finishReason string, deferEmptyOutput bool) bool {
+	if s.streamBlockerBlocked {
+		return true
+	}
 	s.failed = false
 	s.finalErrorStatus = 0
 	s.finalErrorMessage = ""
@@ -182,6 +205,9 @@ func (s *responsesStreamRuntime) finalize(finishReason string, deferEmptyOutput 
 		return true
 	}
 	s.closeIncompleteFunctionItems()
+	if s.maybeReleaseStreamBlocker(true) {
+		return true
+	}
 
 	obj := s.buildCompletedResponseObject(finalThinking, finalText, detected)
 	if s.persistResponse != nil {
@@ -276,6 +302,47 @@ func (s *responsesStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Pa
 		}
 		s.processToolStreamEvents(toolstream.ProcessChunk(&s.sieve, rawTrimmed, s.toolNames), true, true)
 	}
+	if s.maybeReleaseStreamBlocker(false) {
+		return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested, ContentSeen: contentSeen}
+	}
 
 	return streamengine.ParsedDecision{ContentSeen: contentSeen}
+}
+
+func (s *responsesStreamRuntime) shouldBufferForUpstreamBlocker() bool {
+	return s.streamBlockerBufferTokens > 0 && !s.streamBlockerReleased && !s.streamBlockerBlocked
+}
+
+func (s *responsesStreamRuntime) streamBlockerCandidate() string {
+	return strings.TrimSpace(s.thinking.String() + "\n" + s.text.String())
+}
+
+func (s *responsesStreamRuntime) maybeReleaseStreamBlocker(force bool) bool {
+	if !s.shouldBufferForUpstreamBlocker() {
+		return false
+	}
+	candidate := s.streamBlockerCandidate()
+	if candidate == "" {
+		return false
+	}
+	if !force && estimateStreamBlockerTokens(s.model, candidate) < s.streamBlockerBufferTokens {
+		return false
+	}
+	if err := assertUpstreamAllowed(s.store, candidate); err != nil {
+		status := http.StatusForbidden
+		message := err.Error()
+		code := upstreamblocker.Code
+		if matchErr, ok := upstreamblocker.AsMatchError(err); ok {
+			status = matchErr.StatusCode()
+		}
+		s.failResponse(status, message, code)
+		return true
+	}
+	s.streamBlockerReleased = true
+	buffered := append([]responsesBufferedEvent(nil), s.streamBlockerEvents...)
+	s.streamBlockerEvents = nil
+	for _, item := range buffered {
+		s.sendEventDirect(item.event, item.payload)
+	}
+	return false
 }

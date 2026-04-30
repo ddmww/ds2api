@@ -81,10 +81,11 @@ func (s *Store) UpstreamBlockerConfig() UpstreamBlockerConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return UpstreamBlockerConfig{
-		Enabled:       s.cfg.UpstreamBlocker.Enabled,
-		CaseSensitive: s.cfg.UpstreamBlocker.CaseSensitive,
-		Keywords:      append([]string(nil), s.cfg.UpstreamBlocker.Keywords...),
-		Message:       s.cfg.UpstreamBlocker.Message,
+		Enabled:            s.cfg.UpstreamBlocker.Enabled,
+		CaseSensitive:      s.cfg.UpstreamBlocker.CaseSensitive,
+		Keywords:           append([]string(nil), s.cfg.UpstreamBlocker.Keywords...),
+		Message:            s.cfg.UpstreamBlocker.Message,
+		StreamBufferTokens: s.cfg.UpstreamBlocker.StreamBufferTokens,
 	}
 }
 

@@ -188,10 +188,11 @@ func (c Config) Clone() Config {
 		Embeddings: c.Embeddings,
 		Vision:     c.Vision,
 		UpstreamBlocker: UpstreamBlockerConfig{
-			Enabled:       c.UpstreamBlocker.Enabled,
-			CaseSensitive: c.UpstreamBlocker.CaseSensitive,
-			Keywords:      slices.Clone(c.UpstreamBlocker.Keywords),
-			Message:       c.UpstreamBlocker.Message,
+			Enabled:            c.UpstreamBlocker.Enabled,
+			CaseSensitive:      c.UpstreamBlocker.CaseSensitive,
+			Keywords:           slices.Clone(c.UpstreamBlocker.Keywords),
+			Message:            c.UpstreamBlocker.Message,
+			StreamBufferTokens: c.UpstreamBlocker.StreamBufferTokens,
 		},
 		Truncation: TruncationConfig{
 			Enabled:   cloneBoolPtr(c.Truncation.Enabled),

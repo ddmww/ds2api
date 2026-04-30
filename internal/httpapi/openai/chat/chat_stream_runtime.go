@@ -6,9 +6,11 @@ import (
 	"strings"
 
 	openaifmt "ds2api/internal/format/openai"
+	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
 	"ds2api/internal/toolstream"
+	"ds2api/internal/upstreamblocker"
 )
 
 type chatStreamRuntime struct {
@@ -51,6 +53,12 @@ type chatStreamRuntime struct {
 	finalErrorStatus  int
 	finalErrorMessage string
 	finalErrorCode    string
+
+	store                     shared.ConfigReader
+	streamBlockerBufferTokens int
+	streamBlockerReleased     bool
+	streamBlockerBlocked      bool
+	streamBlockerChunks       []any
 }
 
 func newChatStreamRuntime(
@@ -69,25 +77,29 @@ func newChatStreamRuntime(
 	toolsRaw any,
 	bufferToolContent bool,
 	emitEarlyToolDeltas bool,
+	store shared.ConfigReader,
+	streamBlockerBufferTokens int,
 ) *chatStreamRuntime {
 	return &chatStreamRuntime{
-		w:                     w,
-		rc:                    rc,
-		canFlush:              canFlush,
-		completionID:          completionID,
-		created:               created,
-		model:                 model,
-		promptTokens:          promptTokens,
-		finalPrompt:           finalPrompt,
-		toolNames:             toolNames,
-		toolsRaw:              toolsRaw,
-		thinkingEnabled:       thinkingEnabled,
-		searchEnabled:         searchEnabled,
-		stripReferenceMarkers: stripReferenceMarkers,
-		bufferToolContent:     bufferToolContent,
-		emitEarlyToolDeltas:   emitEarlyToolDeltas,
-		streamToolCallIDs:     map[int]string{},
-		streamToolNames:       map[int]string{},
+		w:                         w,
+		rc:                        rc,
+		canFlush:                  canFlush,
+		completionID:              completionID,
+		created:                   created,
+		model:                     model,
+		promptTokens:              promptTokens,
+		finalPrompt:               finalPrompt,
+		toolNames:                 toolNames,
+		toolsRaw:                  toolsRaw,
+		thinkingEnabled:           thinkingEnabled,
+		searchEnabled:             searchEnabled,
+		stripReferenceMarkers:     stripReferenceMarkers,
+		bufferToolContent:         bufferToolContent,
+		emitEarlyToolDeltas:       emitEarlyToolDeltas,
+		store:                     store,
+		streamBlockerBufferTokens: streamBlockerBufferTokens,
+		streamToolCallIDs:         map[int]string{},
+		streamToolNames:           map[int]string{},
 	}
 }
 
@@ -114,6 +126,14 @@ func (s *chatStreamRuntime) sendInitialRoleChunk() {
 }
 
 func (s *chatStreamRuntime) sendChunk(v any) {
+	if s.shouldBufferForUpstreamBlocker() {
+		s.streamBlockerChunks = append(s.streamBlockerChunks, v)
+		return
+	}
+	s.sendChunkDirect(v)
+}
+
+func (s *chatStreamRuntime) sendChunkDirect(v any) {
 	b, _ := json.Marshal(v)
 	_, _ = s.w.Write([]byte("data: "))
 	_, _ = s.w.Write(b)
@@ -134,7 +154,10 @@ func (s *chatStreamRuntime) sendFailedChunk(status int, message, code string) {
 	s.finalErrorStatus = status
 	s.finalErrorMessage = message
 	s.finalErrorCode = code
-	s.sendChunk(map[string]any{
+	s.streamBlockerBlocked = true
+	s.streamBlockerReleased = true
+	s.streamBlockerChunks = nil
+	s.sendChunkDirect(map[string]any{
 		"status_code": status,
 		"error": map[string]any{
 			"message": message,
@@ -146,12 +169,53 @@ func (s *chatStreamRuntime) sendFailedChunk(status int, message, code string) {
 	s.sendDone()
 }
 
+func (s *chatStreamRuntime) shouldBufferForUpstreamBlocker() bool {
+	return s.streamBlockerBufferTokens > 0 && !s.streamBlockerReleased && !s.streamBlockerBlocked
+}
+
+func (s *chatStreamRuntime) streamBlockerCandidate() string {
+	return strings.TrimSpace(s.thinking.String() + "\n" + s.text.String())
+}
+
+func (s *chatStreamRuntime) maybeReleaseStreamBlocker(force bool) bool {
+	if !s.shouldBufferForUpstreamBlocker() {
+		return false
+	}
+	candidate := s.streamBlockerCandidate()
+	if candidate == "" {
+		return false
+	}
+	if !force && estimateStreamBlockerTokens(s.model, candidate) < s.streamBlockerBufferTokens {
+		return false
+	}
+	if err := assertUpstreamAllowed(s.store, candidate); err != nil {
+		status := http.StatusForbidden
+		message := err.Error()
+		code := upstreamblocker.Code
+		if matchErr, ok := upstreamblocker.AsMatchError(err); ok {
+			status = matchErr.StatusCode()
+		}
+		s.sendFailedChunk(status, message, code)
+		return true
+	}
+	s.streamBlockerReleased = true
+	buffered := append([]any(nil), s.streamBlockerChunks...)
+	s.streamBlockerChunks = nil
+	for _, chunk := range buffered {
+		s.sendChunkDirect(chunk)
+	}
+	return false
+}
+
 func (s *chatStreamRuntime) resetStreamToolCallState() {
 	s.streamToolCallIDs = map[int]string{}
 	s.streamToolNames = map[int]string{}
 }
 
 func (s *chatStreamRuntime) finalize(finishReason string, deferEmptyOutput bool) bool {
+	if s.streamBlockerBlocked {
+		return true
+	}
 	s.finalErrorStatus = 0
 	s.finalErrorMessage = ""
 	s.finalErrorCode = ""
@@ -227,6 +291,9 @@ func (s *chatStreamRuntime) finalize(finishReason string, deferEmptyOutput bool)
 
 	if len(detected.Calls) > 0 || s.toolCallsEmitted {
 		finishReason = "tool_calls"
+	}
+	if s.maybeReleaseStreamBlocker(true) {
+		return true
 	}
 	if len(detected.Calls) == 0 && !s.toolCallsEmitted && strings.TrimSpace(finalText) == "" {
 		status, message, code := upstreamEmptyOutputDetail(finishReason == "content_filter", finalText, finalThinking)
@@ -392,6 +459,9 @@ func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedD
 
 	if len(newChoices) > 0 {
 		s.sendChunk(openaifmt.BuildChatStreamChunk(s.completionID, s.created, s.model, newChoices, nil))
+		if s.maybeReleaseStreamBlocker(false) {
+			return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested, ContentSeen: contentSeen}
+		}
 	}
 	return streamengine.ParsedDecision{ContentSeen: contentSeen}
 }

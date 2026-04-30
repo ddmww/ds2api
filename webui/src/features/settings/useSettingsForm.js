@@ -28,6 +28,7 @@ const DEFAULT_FORM = {
         case_sensitive: false,
         keywords_text: '',
         message: '上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。',
+        stream_buffer_tokens: 0,
     },
     truncation_auto_continue: {
         enabled: true,
@@ -107,6 +108,7 @@ function fromServerForm(data) {
                 ? data.upstream_blocker.keywords.join('\n')
                 : String(data.upstream_blocker?.keywords || ''),
             message: data.upstream_blocker?.message || '上游渠道商拦截了当前请求，请尝试换个说法后重试，或稍后再试。',
+            stream_buffer_tokens: Number(data.upstream_blocker?.stream_buffer_tokens || 0),
         },
         truncation_auto_continue: {
             enabled: data.truncation_auto_continue?.enabled ?? true,
@@ -172,6 +174,7 @@ function toServerPayload(form) {
                 .map((item) => item.trim())
                 .filter(Boolean),
             message: String(form.upstream_blocker?.message || '').trim(),
+            stream_buffer_tokens: Number(form.upstream_blocker?.stream_buffer_tokens || 0),
         },
         truncation_auto_continue: {
             enabled: Boolean(form.truncation_auto_continue?.enabled ?? true),

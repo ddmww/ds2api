@@ -327,6 +327,24 @@ export default function BehaviorSection({ t, form, setForm }) {
                             className="w-full bg-background border border-border rounded-lg px-3 py-2"
                         />
                     </label>
+                    <label className="text-sm space-y-2">
+                        <span className="text-muted-foreground">{t('settings.upstreamBlockerStreamBufferTokens')}</span>
+                        <input
+                            type="number"
+                            min={0}
+                            max={100000}
+                            value={form.upstream_blocker?.stream_buffer_tokens ?? 0}
+                            onChange={(e) => setForm((prev) => ({
+                                ...prev,
+                                upstream_blocker: {
+                                    ...prev.upstream_blocker,
+                                    stream_buffer_tokens: Number(e.target.value || 0),
+                                },
+                            }))}
+                            className="w-full bg-background border border-border rounded-lg px-3 py-2"
+                        />
+                        <p className="text-xs text-muted-foreground">{t('settings.upstreamBlockerStreamBufferHelp')}</p>
+                    </label>
                     <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2">
                         <span className="text-sm text-muted-foreground">{t('settings.upstreamBlockerCaseSensitive')}</span>
                         <button
