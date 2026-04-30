@@ -7,16 +7,16 @@ import (
 	"time"
 )
 
-func BuildChatCompletion(completionID, model, finalPrompt, finalThinking, finalText string, toolNames []string) map[string]any {
+func BuildChatCompletion(completionID, model, finalPrompt, finalThinking, finalText string, toolNames []string, toolsRaw any) map[string]any {
 	detected := toolcall.ParseAssistantToolCallsDetailed(finalText, finalThinking, toolNames)
-	return BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThinking, finalText, detected.Calls)
+	return BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThinking, finalText, detected.Calls, toolsRaw)
 }
 
-func BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall) map[string]any {
-	return BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, 0, finalPrompt, finalThinking, finalText, detected)
+func BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall, toolsRaw any) map[string]any {
+	return BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, 0, finalPrompt, finalThinking, finalText, detected, toolsRaw)
 }
 
-func BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model string, promptTokens int, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall) map[string]any {
+func BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model string, promptTokens int, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall, toolsRaw any) map[string]any {
 	finishReason := "stop"
 	messageObj := map[string]any{"role": "assistant", "content": finalText}
 	if strings.TrimSpace(finalThinking) != "" {
@@ -24,7 +24,7 @@ func BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model string,
 	}
 	if len(detected) > 0 {
 		finishReason = "tool_calls"
-		messageObj["tool_calls"] = toolcall.FormatOpenAIToolCalls(detected)
+		messageObj["tool_calls"] = toolcall.FormatOpenAIToolCalls(detected, toolsRaw)
 		messageObj["content"] = nil
 	}
 

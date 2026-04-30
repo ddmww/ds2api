@@ -46,13 +46,7 @@ func buildOpenAIToolSystemPrompt(tools []any, policy ToolChoicePolicy) (string, 
 		if !ok {
 			continue
 		}
-		fn, _ := tool["function"].(map[string]any)
-		if len(fn) == 0 {
-			fn = tool
-		}
-		name, _ := fn["name"].(string)
-		desc, _ := fn["description"].(string)
-		schema, _ := fn["parameters"].(map[string]any)
+		name, desc, schema := toolcall.ExtractToolMeta(tool)
 		name = strings.TrimSpace(name)
 		if !isAllowed(name) {
 			continue
