@@ -44,12 +44,21 @@ func blockChatHistoryDetailDir(t *testing.T, detailDir string) func() {
 	return func() {
 		t.Helper()
 		once.Do(func() {
-			if err := os.RemoveAll(detailDir); err != nil {
-				t.Fatalf("remove blocking detail path failed: %v", err)
+			var lastErr error
+			for i := 0; i < 20; i++ {
+				if err := os.RemoveAll(detailDir); err != nil {
+					lastErr = err
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+				if err := os.Rename(blockedDir, detailDir); err != nil {
+					lastErr = err
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+				return
 			}
-			if err := os.Rename(blockedDir, detailDir); err != nil {
-				t.Fatalf("restore detail dir failed: %v", err)
-			}
+			t.Fatalf("restore detail dir failed: %v", lastErr)
 		})
 	}
 }

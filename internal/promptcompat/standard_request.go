@@ -1,6 +1,9 @@
 package promptcompat
 
-import "ds2api/internal/config"
+import (
+	"ds2api/internal/config"
+	"ds2api/internal/util"
+)
 
 type StandardRequest struct {
 	Surface                 string
@@ -12,6 +15,7 @@ type StandardRequest struct {
 	CurrentInputFileApplied bool
 	ToolsRaw                any
 	FinalPrompt             string
+	EstimatedPromptTokens   int
 	ToolNames               []string
 	ToolChoice              ToolChoicePolicy
 	Stream                  bool
@@ -19,6 +23,17 @@ type StandardRequest struct {
 	Search                  bool
 	RefFileIDs              []string
 	PassThrough             map[string]any
+}
+
+func (r *StandardRequest) RefreshEstimatedPromptTokens() {
+	model := r.ResponseModel
+	if model == "" {
+		model = r.ResolvedModel
+	}
+	if model == "" {
+		model = r.RequestedModel
+	}
+	r.EstimatedPromptTokens = util.EstimateOpenAIRequestTokensWithFallback(model, r.Messages, r.ToolsRaw, r.FinalPrompt)
 }
 
 type ToolChoiceMode string

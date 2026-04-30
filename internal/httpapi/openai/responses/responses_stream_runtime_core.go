@@ -18,12 +18,13 @@ type responsesStreamRuntime struct {
 	rc       *http.ResponseController
 	canFlush bool
 
-	responseID  string
-	model       string
-	finalPrompt string
-	toolNames   []string
-	traceID     string
-	toolChoice  promptcompat.ToolChoicePolicy
+	responseID   string
+	model        string
+	promptTokens int
+	finalPrompt  string
+	toolNames    []string
+	traceID      string
+	toolChoice   promptcompat.ToolChoicePolicy
 
 	thinkingEnabled       bool
 	searchEnabled         bool
@@ -67,6 +68,7 @@ func newResponsesStreamRuntime(
 	canFlush bool,
 	responseID string,
 	model string,
+	promptTokens int,
 	finalPrompt string,
 	thinkingEnabled bool,
 	searchEnabled bool,
@@ -84,6 +86,7 @@ func newResponsesStreamRuntime(
 		canFlush:              canFlush,
 		responseID:            responseID,
 		model:                 model,
+		promptTokens:          promptTokens,
 		finalPrompt:           finalPrompt,
 		thinkingEnabled:       thinkingEnabled,
 		searchEnabled:         searchEnabled,

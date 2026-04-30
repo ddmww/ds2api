@@ -2,6 +2,7 @@ package openai
 
 import (
 	"ds2api/internal/toolcall"
+	"ds2api/internal/util"
 	"strings"
 	"time"
 )
@@ -12,6 +13,10 @@ func BuildChatCompletion(completionID, model, finalPrompt, finalThinking, finalT
 }
 
 func BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall) map[string]any {
+	return BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, 0, finalPrompt, finalThinking, finalText, detected)
+}
+
+func BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model string, promptTokens int, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall) map[string]any {
 	finishReason := "stop"
 	messageObj := map[string]any{"role": "assistant", "content": finalText}
 	if strings.TrimSpace(finalThinking) != "" {
@@ -23,13 +28,16 @@ func BuildChatCompletionWithToolCalls(completionID, model, finalPrompt, finalThi
 		messageObj["content"] = nil
 	}
 
+	if promptTokens <= 0 {
+		promptTokens = util.EstimateTokensByModel(model, finalPrompt)
+	}
 	return map[string]any{
 		"id":      completionID,
 		"object":  "chat.completion",
 		"created": time.Now().Unix(),
 		"model":   model,
 		"choices": []map[string]any{{"index": 0, "message": messageObj, "finish_reason": finishReason}},
-		"usage":   BuildChatUsage(model, finalPrompt, finalThinking, finalText),
+		"usage":   BuildChatUsageWithPromptTokens(model, promptTokens, finalThinking, finalText),
 	}
 }
 

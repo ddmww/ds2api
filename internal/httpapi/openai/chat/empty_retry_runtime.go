@@ -26,14 +26,14 @@ type chatNonStreamResult struct {
 	responseMessageID     int
 }
 
-func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Context, a *auth.RequestAuth, resp *http.Response, payload map[string]any, pow, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
+func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Context, a *auth.RequestAuth, resp *http.Response, payload map[string]any, pow, completionID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
 	attempts := 0
 	currentResp := resp
 	usagePrompt := finalPrompt
 	accumulatedThinking := ""
 	accumulatedToolDetectionThinking := ""
 	for {
-		result, ok := h.collectChatNonStreamAttempt(w, currentResp, completionID, model, usagePrompt, thinkingEnabled, searchEnabled, toolNames)
+		result, ok := h.collectChatNonStreamAttempt(w, currentResp, completionID, model, promptTokens, usagePrompt, thinkingEnabled, searchEnabled, toolNames)
 		if !ok {
 			return
 		}
@@ -43,10 +43,10 @@ func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Co
 		result.toolDetectionThinking = accumulatedToolDetectionThinking
 		detected := detectAssistantToolCalls(result.text, result.thinking, result.toolDetectionThinking, toolNames)
 		result.detectedCalls = len(detected.Calls)
-		result.body = openaifmt.BuildChatCompletionWithToolCalls(completionID, model, usagePrompt, result.thinking, result.text, detected.Calls)
+		result.body = openaifmt.BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, promptTokens, usagePrompt, result.thinking, result.text, detected.Calls)
 		result.finishReason = chatFinishReason(result.body)
 		if !shouldRetryChatNonStream(result, attempts) {
-			h.finishChatNonStreamResult(w, result, attempts, model, usagePrompt, historySession)
+			h.finishChatNonStreamResult(w, result, attempts, historySession)
 			return
 		}
 
@@ -72,7 +72,7 @@ func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Co
 	}
 }
 
-func (h *Handler) collectChatNonStreamAttempt(w http.ResponseWriter, resp *http.Response, completionID, model, usagePrompt string, thinkingEnabled, searchEnabled bool, toolNames []string) (chatNonStreamResult, bool) {
+func (h *Handler) collectChatNonStreamAttempt(w http.ResponseWriter, resp *http.Response, completionID, model string, promptTokens int, usagePrompt string, thinkingEnabled, searchEnabled bool, toolNames []string) (chatNonStreamResult, bool) {
 	if resp.StatusCode != http.StatusOK {
 		defer func() { _ = resp.Body.Close() }()
 		body, _ := io.ReadAll(resp.Body)
@@ -88,7 +88,7 @@ func (h *Handler) collectChatNonStreamAttempt(w http.ResponseWriter, resp *http.
 		finalText = replaceCitationMarkersWithLinks(finalText, result.CitationLinks)
 	}
 	detected := detectAssistantToolCalls(finalText, finalThinking, finalToolDetectionThinking, toolNames)
-	respBody := openaifmt.BuildChatCompletionWithToolCalls(completionID, model, usagePrompt, finalThinking, finalText, detected.Calls)
+	respBody := openaifmt.BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, promptTokens, usagePrompt, finalThinking, finalText, detected.Calls)
 	return chatNonStreamResult{
 		thinking:              finalThinking,
 		toolDetectionThinking: finalToolDetectionThinking,
@@ -101,7 +101,7 @@ func (h *Handler) collectChatNonStreamAttempt(w http.ResponseWriter, resp *http.
 	}, true
 }
 
-func (h *Handler) finishChatNonStreamResult(w http.ResponseWriter, result chatNonStreamResult, attempts int, model, usagePrompt string, historySession *chatHistorySession) {
+func (h *Handler) finishChatNonStreamResult(w http.ResponseWriter, result chatNonStreamResult, attempts int, historySession *chatHistorySession) {
 	if result.detectedCalls == 0 && shouldWriteUpstreamEmptyOutputError(result.text) {
 		status, message, code := upstreamEmptyOutputDetail(result.contentFilter, result.text, result.thinking)
 		if historySession != nil {
@@ -112,7 +112,8 @@ func (h *Handler) finishChatNonStreamResult(w http.ResponseWriter, result chatNo
 		return
 	}
 	if historySession != nil {
-		historySession.success(http.StatusOK, result.thinking, result.text, result.finishReason, openaifmt.BuildChatUsage(model, usagePrompt, result.thinking, result.text))
+		usage, _ := result.body["usage"].(map[string]any)
+		historySession.success(http.StatusOK, result.thinking, result.text, result.finishReason, usage)
 	}
 	writeJSON(w, http.StatusOK, result.body)
 	source := "first_attempt"
@@ -139,8 +140,8 @@ func shouldRetryChatNonStream(result chatNonStreamResult, attempts int) bool {
 		strings.TrimSpace(result.text) == ""
 }
 
-func (h *Handler) handleStreamWithRetry(w http.ResponseWriter, r *http.Request, a *auth.RequestAuth, resp *http.Response, payload map[string]any, pow, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
-	streamRuntime, initialType, ok := h.prepareChatStreamRuntime(w, resp, completionID, model, finalPrompt, thinkingEnabled, searchEnabled, toolNames, historySession)
+func (h *Handler) handleStreamWithRetry(w http.ResponseWriter, r *http.Request, a *auth.RequestAuth, resp *http.Response, payload map[string]any, pow, completionID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
+	streamRuntime, initialType, ok := h.prepareChatStreamRuntime(w, resp, completionID, model, promptTokens, finalPrompt, thinkingEnabled, searchEnabled, toolNames, historySession)
 	if !ok {
 		return
 	}
@@ -182,7 +183,7 @@ func (h *Handler) handleStreamWithRetry(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
-func (h *Handler) prepareChatStreamRuntime(w http.ResponseWriter, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) (*chatStreamRuntime, string, bool) {
+func (h *Handler) prepareChatStreamRuntime(w http.ResponseWriter, resp *http.Response, completionID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) (*chatStreamRuntime, string, bool) {
 	if resp.StatusCode != http.StatusOK {
 		defer func() { _ = resp.Body.Close() }()
 		body, _ := io.ReadAll(resp.Body)
@@ -206,7 +207,7 @@ func (h *Handler) prepareChatStreamRuntime(w http.ResponseWriter, resp *http.Res
 		initialType = "thinking"
 	}
 	streamRuntime := newChatStreamRuntime(
-		w, rc, canFlush, completionID, time.Now().Unix(), model, finalPrompt,
+		w, rc, canFlush, completionID, time.Now().Unix(), model, promptTokens, finalPrompt,
 		thinkingEnabled, searchEnabled, h.compatStripReferenceMarkers(), toolNames,
 		len(toolNames) > 0 && h.compatStreamToolBuffer(), h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence(),
 	)

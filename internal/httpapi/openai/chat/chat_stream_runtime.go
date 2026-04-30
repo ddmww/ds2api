@@ -19,6 +19,7 @@ type chatStreamRuntime struct {
 	completionID string
 	created      int64
 	model        string
+	promptTokens int
 	finalPrompt  string
 	toolNames    []string
 
@@ -56,6 +57,7 @@ func newChatStreamRuntime(
 	completionID string,
 	created int64,
 	model string,
+	promptTokens int,
 	finalPrompt string,
 	thinkingEnabled bool,
 	searchEnabled bool,
@@ -71,6 +73,7 @@ func newChatStreamRuntime(
 		completionID:          completionID,
 		created:               created,
 		model:                 model,
+		promptTokens:          promptTokens,
 		finalPrompt:           finalPrompt,
 		toolNames:             toolNames,
 		thinkingEnabled:       thinkingEnabled,
@@ -231,7 +234,10 @@ func (s *chatStreamRuntime) finalize(finishReason string, deferEmptyOutput bool)
 		s.sendFailedChunk(status, message, code)
 		return true
 	}
-	usage := openaifmt.BuildChatUsage(s.model, s.finalPrompt, finalThinking, finalText)
+	usage := openaifmt.BuildChatUsageWithPromptTokens(s.model, s.promptTokens, finalThinking, finalText)
+	if s.promptTokens <= 0 {
+		usage = openaifmt.BuildChatUsage(s.model, s.finalPrompt, finalThinking, finalText)
+	}
 	s.finalFinishReason = finishReason
 	s.finalUsage = usage
 	s.sendChunk(openaifmt.BuildChatStreamChunk(

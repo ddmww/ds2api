@@ -147,6 +147,7 @@ func (s *responsesStreamRuntime) buildCompletedResponseObject(finalThinking, fin
 	return openaifmt.BuildResponseObjectFromItems(
 		s.responseID,
 		s.model,
+		s.promptTokens,
 		s.finalPrompt,
 		finalThinking,
 		finalText,

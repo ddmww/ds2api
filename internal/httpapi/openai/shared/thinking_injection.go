@@ -17,5 +17,6 @@ func ApplyThinkingInjection(store ConfigReader, stdReq promptcompat.StandardRequ
 	stdReq.Messages = messages
 	stdReq.FinalPrompt = finalPrompt
 	stdReq.ToolNames = toolNames
+	stdReq.RefreshEstimatedPromptTokens()
 	return stdReq
 }

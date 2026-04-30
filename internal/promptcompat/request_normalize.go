@@ -48,7 +48,7 @@ func NormalizeOpenAIChatRequest(store ConfigReader, req map[string]any, traceID 
 	passThrough := collectOpenAIChatPassThrough(req)
 	refFileIDs := CollectOpenAIRefFileIDs(req)
 
-	return StandardRequest{
+	out := StandardRequest{
 		Surface:        "openai_chat",
 		RequestedModel: strings.TrimSpace(model),
 		ResolvedModel:  resolvedModel,
@@ -63,7 +63,9 @@ func NormalizeOpenAIChatRequest(store ConfigReader, req map[string]any, traceID 
 		Search:         searchEnabled,
 		RefFileIDs:     refFileIDs,
 		PassThrough:    passThrough,
-	}, nil
+	}
+	out.RefreshEstimatedPromptTokens()
+	return out, nil
 }
 
 func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, traceID string) (StandardRequest, error) {
@@ -108,7 +110,7 @@ func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, tra
 	passThrough := collectOpenAIChatPassThrough(req)
 	refFileIDs := CollectOpenAIRefFileIDs(req)
 
-	return StandardRequest{
+	out := StandardRequest{
 		Surface:        "openai_responses",
 		RequestedModel: model,
 		ResolvedModel:  resolvedModel,
@@ -123,7 +125,9 @@ func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, tra
 		Search:         searchEnabled,
 		RefFileIDs:     refFileIDs,
 		PassThrough:    passThrough,
-	}, nil
+	}
+	out.RefreshEstimatedPromptTokens()
+	return out, nil
 }
 
 func ensureToolDetectionEnabled(toolNames []string, toolsRaw any) []string {

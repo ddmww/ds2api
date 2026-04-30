@@ -50,6 +50,7 @@ func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptco
 		stdReq.Messages = promptMessages
 		stdReq.HistoryText = historyText
 		stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPromptForGrok(promptMessages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
+		stdReq.RefreshEstimatedPromptTokens()
 		return stdReq, nil
 	}
 
@@ -71,6 +72,7 @@ func (s Service) Apply(ctx context.Context, a *auth.RequestAuth, stdReq promptco
 	stdReq.HistoryText = historyText
 	stdReq.RefFileIDs = prependUniqueRefFileID(stdReq.RefFileIDs, fileID)
 	stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPrompt(promptMessages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
+	stdReq.RefreshEstimatedPromptTokens()
 	return stdReq, nil
 }
 

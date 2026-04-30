@@ -2,6 +2,7 @@ package openai
 
 import (
 	"ds2api/internal/toolcall"
+	"ds2api/internal/util"
 	"encoding/json"
 	"strings"
 	"time"
@@ -17,6 +18,10 @@ func BuildResponseObject(responseID, model, finalPrompt, finalThinking, finalTex
 }
 
 func BuildResponseObjectWithToolCalls(responseID, model, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall) map[string]any {
+	return BuildResponseObjectWithToolCallsAndPromptTokens(responseID, model, 0, finalPrompt, finalThinking, finalText, detected)
+}
+
+func BuildResponseObjectWithToolCallsAndPromptTokens(responseID, model string, promptTokens int, finalPrompt, finalThinking, finalText string, detected []toolcall.ParsedToolCall) map[string]any {
 	exposedOutputText := finalText
 	output := make([]any, 0, 2)
 	if len(detected) > 0 {
@@ -49,6 +54,7 @@ func BuildResponseObjectWithToolCalls(responseID, model, finalPrompt, finalThink
 	return BuildResponseObjectFromItems(
 		responseID,
 		model,
+		promptTokens,
 		finalPrompt,
 		finalThinking,
 		finalText,
@@ -57,9 +63,12 @@ func BuildResponseObjectWithToolCalls(responseID, model, finalPrompt, finalThink
 	)
 }
 
-func BuildResponseObjectFromItems(responseID, model, finalPrompt, finalThinking, finalText string, output []any, outputText string) map[string]any {
+func BuildResponseObjectFromItems(responseID, model string, promptTokens int, finalPrompt, finalThinking, finalText string, output []any, outputText string) map[string]any {
 	if output == nil {
 		output = []any{}
+	}
+	if promptTokens <= 0 {
+		promptTokens = util.EstimateTokensByModel(model, finalPrompt)
 	}
 	return map[string]any{
 		"id":          responseID,
@@ -70,7 +79,7 @@ func BuildResponseObjectFromItems(responseID, model, finalPrompt, finalThinking,
 		"model":       model,
 		"output":      output,
 		"output_text": outputText,
-		"usage":       BuildResponsesUsage(model, finalPrompt, finalThinking, finalText),
+		"usage":       BuildResponsesUsageWithPromptTokens(model, promptTokens, finalThinking, finalText),
 	}
 }
 

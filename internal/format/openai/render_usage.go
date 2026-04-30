@@ -3,7 +3,10 @@ package openai
 import "ds2api/internal/util"
 
 func BuildChatUsage(model, finalPrompt, finalThinking, finalText string) map[string]any {
-	promptTokens := util.EstimateTokensByModel(model, finalPrompt)
+	return BuildChatUsageWithPromptTokens(model, util.EstimateTokensByModel(model, finalPrompt), finalThinking, finalText)
+}
+
+func BuildChatUsageWithPromptTokens(model string, promptTokens int, finalThinking, finalText string) map[string]any {
 	reasoningTokens := util.EstimateTokensByModel(model, finalThinking)
 	completionTokens := util.EstimateTokensByModel(model, finalText)
 	totalCompletionTokens := reasoningTokens + completionTokens
@@ -26,7 +29,10 @@ func BuildChatUsage(model, finalPrompt, finalThinking, finalText string) map[str
 }
 
 func BuildResponsesUsage(model, finalPrompt, finalThinking, finalText string) map[string]any {
-	promptTokens := util.EstimateTokensByModel(model, finalPrompt)
+	return BuildResponsesUsageWithPromptTokens(model, util.EstimateTokensByModel(model, finalPrompt), finalThinking, finalText)
+}
+
+func BuildResponsesUsageWithPromptTokens(model string, promptTokens int, finalThinking, finalText string) map[string]any {
 	reasoningTokens := util.EstimateTokensByModel(model, finalThinking)
 	completionTokens := util.EstimateTokensByModel(model, finalText)
 	return map[string]any{
