@@ -122,8 +122,8 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	h.handleResponsesNonStreamWithRetry(w, r.Context(), a, resp, payload, pow, owner, responseID, stdReq.ResponseModel, stdReq.EstimatedPromptTokens, stdReq.FinalPrompt, stdReq.Thinking, stdReq.Search, stdReq.ToolNames, stdReq.ToolsRaw, stdReq.ToolChoice, traceID)
 }
 
-func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
-	h.handleResponsesNonStreamWithPromptTokens(w, resp, owner, responseID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, nil, toolChoice, traceID)
+func (h *Handler) handleResponsesNonStream(w http.ResponseWriter, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
+	h.handleResponsesNonStreamWithPromptTokens(w, resp, owner, responseID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, toolsRaw, toolChoice, traceID)
 }
 
 func (h *Handler) handleResponsesNonStreamWithPromptTokens(w http.ResponseWriter, resp *http.Response, owner, responseID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
@@ -162,8 +162,8 @@ func (h *Handler) handleResponsesNonStreamWithPromptTokens(w http.ResponseWriter
 	writeJSON(w, http.StatusOK, responseObj)
 }
 
-func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
-	h.handleResponsesStreamWithPromptTokens(w, r, resp, owner, responseID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, nil, toolChoice, traceID)
+func (h *Handler) handleResponsesStream(w http.ResponseWriter, r *http.Request, resp *http.Response, owner, responseID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
+	h.handleResponsesStreamWithPromptTokens(w, r, resp, owner, responseID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, toolsRaw, toolChoice, traceID)
 }
 
 func (h *Handler) handleResponsesStreamWithPromptTokens(w http.ResponseWriter, r *http.Request, resp *http.Response, owner, responseID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, toolChoice promptcompat.ToolChoicePolicy, traceID string) {

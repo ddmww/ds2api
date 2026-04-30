@@ -149,8 +149,8 @@ func (h *Handler) autoDeleteRemoteSession(ctx context.Context, a *auth.RequestAu
 	}
 }
 
-func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
-	h.handleNonStreamWithPromptTokens(w, resp, completionID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, nil, historySession)
+func (h *Handler) handleNonStream(w http.ResponseWriter, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, historySession *chatHistorySession) {
+	h.handleNonStreamWithPromptTokens(w, resp, completionID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, toolsRaw, historySession)
 }
 
 func (h *Handler) handleNonStreamWithPromptTokens(w http.ResponseWriter, resp *http.Response, completionID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, historySession *chatHistorySession) {
@@ -202,8 +202,8 @@ func (h *Handler) handleNonStreamWithPromptTokens(w http.ResponseWriter, resp *h
 	writeJSON(w, http.StatusOK, respBody)
 }
 
-func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, historySession *chatHistorySession) {
-	h.handleStreamWithPromptTokens(w, r, resp, completionID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, nil, historySession)
+func (h *Handler) handleStream(w http.ResponseWriter, r *http.Request, resp *http.Response, completionID, model, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, historySession *chatHistorySession) {
+	h.handleStreamWithPromptTokens(w, r, resp, completionID, model, 0, finalPrompt, thinkingEnabled, searchEnabled, toolNames, toolsRaw, historySession)
 }
 
 func (h *Handler) handleStreamWithPromptTokens(w http.ResponseWriter, r *http.Request, resp *http.Response, completionID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, historySession *chatHistorySession) {
