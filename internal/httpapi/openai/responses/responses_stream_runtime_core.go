@@ -25,6 +25,7 @@ type responsesStreamRuntime struct {
 	toolNames    []string
 	traceID      string
 	toolChoice   promptcompat.ToolChoicePolicy
+	toolsRaw     any
 
 	thinkingEnabled       bool
 	searchEnabled         bool
@@ -74,6 +75,7 @@ func newResponsesStreamRuntime(
 	searchEnabled bool,
 	stripReferenceMarkers bool,
 	toolNames []string,
+	toolsRaw any,
 	bufferToolContent bool,
 	emitEarlyToolDeltas bool,
 	toolChoice promptcompat.ToolChoicePolicy,
@@ -92,6 +94,7 @@ func newResponsesStreamRuntime(
 		searchEnabled:         searchEnabled,
 		stripReferenceMarkers: stripReferenceMarkers,
 		toolNames:             toolNames,
+		toolsRaw:              toolsRaw,
 		bufferToolContent:     bufferToolContent,
 		emitEarlyToolDeltas:   emitEarlyToolDeltas,
 		streamToolCallIDs:     map[int]string{},
