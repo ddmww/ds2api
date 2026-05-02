@@ -461,7 +461,9 @@ func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedD
 	}
 
 	if len(newChoices) > 0 {
-		s.sendChunk(openaifmt.BuildChatStreamChunk(s.completionID, s.created, s.model, newChoices, nil))
+		for _, choice := range newChoices {
+			s.sendChunk(openaifmt.BuildChatStreamChunk(s.completionID, s.created, s.model, []map[string]any{choice}, nil))
+		}
 		if s.maybeReleaseStreamBlocker(false) {
 			return streamengine.ParsedDecision{Stop: true, StopReason: streamengine.StopReasonHandlerRequested, ContentSeen: contentSeen}
 		}

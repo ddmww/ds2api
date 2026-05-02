@@ -349,6 +349,45 @@ func TestChatCompletionsStreamRetriesEmptyOutputOnSameSession(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsStreamEmitsSingleChoicePerDeltaFrame(t *testing.T) {
+	h := &openAITestSurface{
+		Store: mockOpenAIConfig{wideInput: true},
+		Auth:  streamStatusAuthStub{},
+		DS: streamStatusDSStub{resp: makeOpenAISSEHTTPResponse(
+			`data: {"v":{"response":{"fragments":[{"type":"THINK","content":"我们"},{"type":"THINK","content":"被"},{"type":"THINK","content":"要求"}]}}}`,
+			`data: {"v":{"response":{"fragments":[{"type":"RESPONSE","content":"你好"},{"type":"RESPONSE","content":"世界"}]}}}`,
+			"data: [DONE]",
+		)},
+	}
+	reqBody := `{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"hi"}],"stream":true}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(reqBody))
+	req.Header.Set("Authorization", "Bearer direct-token")
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	newOpenAITestRouter(h).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	frames, done := parseSSEDataFrames(t, rec.Body.String())
+	if !done {
+		t.Fatalf("expected [DONE], body=%s", rec.Body.String())
+	}
+	content := ""
+	for _, frame := range frames {
+		choices, _ := frame["choices"].([]any)
+		if len(choices) != 1 {
+			t.Fatalf("expected exactly one choice per stream frame, got %#v body=%s", choices, rec.Body.String())
+		}
+		choice, _ := choices[0].(map[string]any)
+		delta, _ := choice["delta"].(map[string]any)
+		content += asString(delta["content"])
+	}
+	if content != "你好世界" {
+		t.Fatalf("expected full content without dropped deltas, got %q body=%s", content, rec.Body.String())
+	}
+}
+
 func TestChatCompletionsNonStreamRetriesThinkingOnlyOutput(t *testing.T) {
 	ds := &streamStatusDSSeqStub{resps: []*http.Response{
 		makeOpenAISSEHTTPResponse(`data: {"response_message_id":99,"p":"response/thinking_content","v":"plan"}`, "data: [DONE]"),
