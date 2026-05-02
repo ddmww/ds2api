@@ -29,6 +29,22 @@ func TestTrimContinuationOverlapPreservesNormalIncrement(t *testing.T) {
 	}
 }
 
+func TestTrimContinuationOverlapTrimsShortGrowingSnapshot(t *testing.T) {
+	existing := "你好"
+	incoming := "你好，"
+	got := TrimContinuationOverlap(existing, incoming)
+	if got != "，" {
+		t.Fatalf("expected short snapshot suffix, got %q", got)
+	}
+}
+
+func TestTrimContinuationOverlapPreservesRepeatedShortToken(t *testing.T) {
+	got := TrimContinuationOverlap("字", "字")
+	if got != "字" {
+		t.Fatalf("expected repeated short token preserved, got %q", got)
+	}
+}
+
 func TestTrimContinuationOverlapKeepsShortPrefixLikeNormalToken(t *testing.T) {
 	existing := "我们被问到"
 	incoming := "我们"

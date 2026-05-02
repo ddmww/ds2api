@@ -9,7 +9,7 @@ function trimContinuationOverlap(existing, incoming) {
   if (!existing) {
     return incoming;
   }
-  if (incoming.length >= MIN_CONTINUATION_SNAPSHOT_LEN && incoming.startsWith(existing)) {
+  if (incoming.length > existing.length && incoming.startsWith(existing)) {
     return incoming.slice(existing.length);
   }
   if (incoming.length >= MIN_CONTINUATION_SNAPSHOT_LEN && existing.startsWith(incoming)) {

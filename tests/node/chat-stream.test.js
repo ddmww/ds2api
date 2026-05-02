@@ -810,6 +810,8 @@ test('setCorsHeaders reflects requested third-party headers and blocks internal-
 
 test('trimContinuationOverlap preserves short normal tokens and trims long snapshots', () => {
   assert.equal(trimContinuationOverlap('我们被问到', '我们'), '我们');
+  assert.equal(trimContinuationOverlap('你好', '你好，'), '，');
+  assert.equal(trimContinuationOverlap('字', '字'), '字');
   const existing = '我们被问到：这是一个很长的续答快照前缀，用来验证去重逻辑不会误伤正常 token。';
   const incoming = `${existing}继续分析`;
   assert.equal(trimContinuationOverlap(existing, incoming), '继续分析');
