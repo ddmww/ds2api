@@ -37,6 +37,7 @@ type ConfigReader interface {
 	ModelAliases() map[string]string
 	CompatWideInputStrictOutput() bool
 	CompatStripReferenceMarkers() bool
+	CompatToolProcessingEnabled() bool
 	CompatStreamToolBuffer() bool
 	ToolcallMode() string
 	ToolcallEarlyEmitConfidence() string
@@ -75,6 +76,13 @@ func CompatStreamToolBuffer(store ConfigReader) bool {
 		return true
 	}
 	return store.CompatStreamToolBuffer()
+}
+
+func CompatToolProcessingEnabled(store ConfigReader) bool {
+	if store == nil {
+		return true
+	}
+	return store.CompatToolProcessingEnabled()
 }
 
 var WriteJSON = util.WriteJSON

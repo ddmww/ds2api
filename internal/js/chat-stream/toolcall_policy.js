@@ -7,6 +7,14 @@ const {
 } = require('../helpers/stream-tool-sieve');
 
 function resolveToolcallPolicy(prepBody, payloadTools) {
+  const compat = prepBody && prepBody.compat && typeof prepBody.compat === 'object' ? prepBody.compat : null;
+  if (compat && compat.tool_processing_enabled === false) {
+    return {
+      toolNames: [],
+      toolSieveEnabled: false,
+      emitEarlyToolDeltas: false,
+    };
+  }
   const preparedToolNames = normalizePreparedToolNames(prepBody && prepBody.tool_names);
   let toolNames = preparedToolNames.length > 0 ? preparedToolNames : extractToolNames(payloadTools);
   if (toolNames.length === 0 && Array.isArray(payloadTools) && payloadTools.length > 0) {

@@ -196,8 +196,8 @@ func (h *Handler) prepareResponsesStreamRuntime(w http.ResponseWriter, resp *htt
 	}
 	streamRuntime := newResponsesStreamRuntime(
 		w, rc, canFlush, responseID, model, promptTokens, finalPrompt, 0, thinkingEnabled, searchEnabled,
-		h.compatStripReferenceMarkers(), toolNames, toolsRaw, len(toolNames) > 0 && h.compatStreamToolBuffer(),
-		h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence(),
+		h.compatStripReferenceMarkers(), toolNames, toolsRaw, h.compatToolProcessingEnabled() && len(toolNames) > 0 && h.compatStreamToolBuffer(),
+		h.compatToolProcessingEnabled() && h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence(),
 		toolChoice, traceID, func(obj map[string]any) {
 			h.getResponseStore().put(owner, responseID, obj)
 		},

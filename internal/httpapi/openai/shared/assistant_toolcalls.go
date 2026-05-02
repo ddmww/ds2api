@@ -7,6 +7,9 @@ import (
 )
 
 func DetectAssistantToolCalls(rawText, visibleText, exposedThinking, detectionThinking string, toolNames []string) toolcall.ToolCallParseResult {
+	if len(toolNames) == 0 {
+		return toolcall.ToolCallParseResult{}
+	}
 	textParsed := toolcall.ParseStandaloneToolCallsDetailed(rawText, toolNames)
 	if len(textParsed.Calls) > 0 {
 		return textParsed

@@ -69,6 +69,9 @@ func (h *Handler) updateSettings(w http.ResponseWriter, r *http.Request) {
 			if compatCfg.StripReferenceMarkers != nil {
 				c.Compat.StripReferenceMarkers = compatCfg.StripReferenceMarkers
 			}
+			if compatCfg.ToolProcessingEnabled != nil {
+				c.Compat.ToolProcessingEnabled = compatCfg.ToolProcessingEnabled
+			}
 			if compatCfg.StreamToolBuffer != nil {
 				c.Compat.StreamToolBuffer = compatCfg.StreamToolBuffer
 			}

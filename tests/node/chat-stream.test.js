@@ -390,6 +390,16 @@ test('resolveToolcallPolicy defaults to feature-match + early emit when prepare 
   assert.equal(policy.emitEarlyToolDeltas, true);
 });
 
+test('resolveToolcallPolicy disables tool handling from compat switch', () => {
+  const policy = resolveToolcallPolicy(
+    { compat: { tool_processing_enabled: false }, tool_names: ['read_file'] },
+    [{ type: 'function', function: { name: 'fallback_tool', parameters: { type: 'object' } } }],
+  );
+  assert.deepEqual(policy.toolNames, []);
+  assert.equal(policy.toolSieveEnabled, false);
+  assert.equal(policy.emitEarlyToolDeltas, false);
+});
+
 test('resolveToolcallPolicy ignores prepare flags and keeps early emit enabled', () => {
   const policy = resolveToolcallPolicy(
     {

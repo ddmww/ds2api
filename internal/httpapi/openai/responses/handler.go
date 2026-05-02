@@ -43,6 +43,13 @@ func (h *Handler) compatStreamToolBuffer() bool {
 	return shared.CompatStreamToolBuffer(h.Store)
 }
 
+func (h *Handler) compatToolProcessingEnabled() bool {
+	if h == nil {
+		return true
+	}
+	return shared.CompatToolProcessingEnabled(h.Store)
+}
+
 func (h *Handler) applyCurrentInputFile(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
 	if h == nil {
 		return stdReq, nil

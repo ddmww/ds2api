@@ -92,6 +92,10 @@ func parseSettingsUpdateRequest(req map[string]any) (*config.AdminConfig, *confi
 			b := boolFrom(v)
 			cfg.StripReferenceMarkers = &b
 		}
+		if v, exists := raw["tool_processing_enabled"]; exists {
+			b := boolFrom(v)
+			cfg.ToolProcessingEnabled = &b
+		}
 		if v, exists := raw["stream_tool_buffer"]; exists {
 			b := boolFrom(v)
 			cfg.StreamToolBuffer = &b

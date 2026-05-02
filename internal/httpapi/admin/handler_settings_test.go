@@ -128,7 +128,8 @@ func TestUpdateSettingsPersistsStreamToolBufferFalse(t *testing.T) {
 	h := newAdminTestHandler(t, `{"keys":["k1"]}`)
 	payload := map[string]any{
 		"compat": map[string]any{
-			"stream_tool_buffer": false,
+			"stream_tool_buffer":      false,
+			"tool_processing_enabled": false,
 		},
 	}
 	b, _ := json.Marshal(payload)
@@ -142,6 +143,9 @@ func TestUpdateSettingsPersistsStreamToolBufferFalse(t *testing.T) {
 	if snap.Compat.StreamToolBuffer == nil || *snap.Compat.StreamToolBuffer {
 		t.Fatalf("expected compat.stream_tool_buffer=false, got=%v", snap.Compat.StreamToolBuffer)
 	}
+	if snap.Compat.ToolProcessingEnabled == nil || *snap.Compat.ToolProcessingEnabled {
+		t.Fatalf("expected compat.tool_processing_enabled=false, got=%v", snap.Compat.ToolProcessingEnabled)
+	}
 
 	getReq := httptest.NewRequest(http.MethodGet, "/admin/settings", nil)
 	getRec := httptest.NewRecorder()
@@ -154,6 +158,9 @@ func TestUpdateSettingsPersistsStreamToolBufferFalse(t *testing.T) {
 	compat, _ := body["compat"].(map[string]any)
 	if got := boolFrom(compat["stream_tool_buffer"]); got {
 		t.Fatalf("expected response compat.stream_tool_buffer=false, body=%v", body)
+	}
+	if got := boolFrom(compat["tool_processing_enabled"]); got {
+		t.Fatalf("expected response compat.tool_processing_enabled=false, body=%v", body)
 	}
 }
 

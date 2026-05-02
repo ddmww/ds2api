@@ -204,7 +204,7 @@ async function handleVercelStream(req, res, rawBody, payload) {
         return true;
       }
       deltaCoalescer.flush();
-      const detected = parseStandaloneToolCalls(outputText, toolNames);
+      const detected = toolNames.length > 0 ? parseStandaloneToolCalls(outputText, toolNames) : [];
       if (detected.length > 0 && !toolCallsDoneEmitted) {
         toolCallsEmitted = true;
         toolCallsDoneEmitted = true;

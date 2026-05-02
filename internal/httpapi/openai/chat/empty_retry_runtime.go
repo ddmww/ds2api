@@ -221,7 +221,8 @@ func (h *Handler) prepareChatStreamRuntime(w http.ResponseWriter, resp *http.Res
 	streamRuntime := newChatStreamRuntime(
 		w, rc, canFlush, completionID, time.Now().Unix(), model, promptTokens, finalPrompt, 0,
 		thinkingEnabled, searchEnabled, h.compatStripReferenceMarkers(), toolNames, toolsRaw,
-		len(toolNames) > 0 && h.compatStreamToolBuffer(), h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence(),
+		h.compatToolProcessingEnabled() && len(toolNames) > 0 && h.compatStreamToolBuffer(),
+		h.compatToolProcessingEnabled() && h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence(),
 		h.Store, streamUpstreamBlockerBufferTokens(h.Store),
 	)
 	streamRuntime.sendInitialRoleChunk()

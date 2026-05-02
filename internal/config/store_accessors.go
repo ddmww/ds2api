@@ -48,6 +48,15 @@ func (s *Store) CompatStreamToolBuffer() bool {
 	return *s.cfg.Compat.StreamToolBuffer
 }
 
+func (s *Store) CompatToolProcessingEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Compat.ToolProcessingEnabled == nil {
+		return true
+	}
+	return *s.cfg.Compat.ToolProcessingEnabled
+}
+
 func (s *Store) ToolcallMode() string {
 	return "feature_match"
 }

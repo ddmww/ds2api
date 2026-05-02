@@ -11,6 +11,7 @@ import (
 type ConfigReader interface {
 	ModelAliases() map[string]string
 	CompatWideInputStrictOutput() bool
+	CompatToolProcessingEnabled() bool
 }
 
 type historySplitUseFileReader interface {
@@ -36,13 +37,21 @@ func NormalizeOpenAIChatRequest(store ConfigReader, req map[string]any, traceID 
 	if responseModel == "" {
 		responseModel = resolvedModel
 	}
-	toolPolicy, err := parseToolChoicePolicy(req["tool_choice"], req["tools"])
-	if err != nil {
-		return StandardRequest{}, err
+	toolsRaw := req["tools"]
+	toolPolicy := DefaultToolChoicePolicy()
+	if !compatToolProcessingEnabled(store) {
+		toolsRaw = nil
+		toolPolicy = ToolChoicePolicy{Mode: ToolChoiceNone}
+	} else {
+		var err error
+		toolPolicy, err = parseToolChoicePolicy(req["tool_choice"], req["tools"])
+		if err != nil {
+			return StandardRequest{}, err
+		}
 	}
-	finalPrompt, toolNames := BuildOpenAIPromptForHistoryMode(store, messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
+	finalPrompt, toolNames := BuildOpenAIPromptForHistoryMode(store, messagesRaw, toolsRaw, traceID, toolPolicy, thinkingEnabled)
 	if !toolPolicy.IsNone() {
-		toolNames = ensureToolDetectionEnabled(toolNames, req["tools"])
+		toolNames = ensureToolDetectionEnabled(toolNames, toolsRaw)
 		toolPolicy.Allowed = namesToSet(toolNames)
 	}
 	passThrough := collectOpenAIChatPassThrough(req)
@@ -54,7 +63,7 @@ func NormalizeOpenAIChatRequest(store ConfigReader, req map[string]any, traceID 
 		ResolvedModel:  resolvedModel,
 		ResponseModel:  responseModel,
 		Messages:       messagesRaw,
-		ToolsRaw:       req["tools"],
+		ToolsRaw:       toolsRaw,
 		FinalPrompt:    finalPrompt,
 		ToolNames:      toolNames,
 		ToolChoice:     toolPolicy,
@@ -98,13 +107,21 @@ func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, tra
 	if len(messagesRaw) == 0 {
 		return StandardRequest{}, fmt.Errorf("request must include 'input' or 'messages'")
 	}
-	toolPolicy, err := parseToolChoicePolicy(req["tool_choice"], req["tools"])
-	if err != nil {
-		return StandardRequest{}, err
+	toolsRaw := req["tools"]
+	toolPolicy := DefaultToolChoicePolicy()
+	if !compatToolProcessingEnabled(store) {
+		toolsRaw = nil
+		toolPolicy = ToolChoicePolicy{Mode: ToolChoiceNone}
+	} else {
+		var err error
+		toolPolicy, err = parseToolChoicePolicy(req["tool_choice"], req["tools"])
+		if err != nil {
+			return StandardRequest{}, err
+		}
 	}
-	finalPrompt, toolNames := BuildOpenAIPromptForHistoryMode(store, messagesRaw, req["tools"], traceID, toolPolicy, thinkingEnabled)
+	finalPrompt, toolNames := BuildOpenAIPromptForHistoryMode(store, messagesRaw, toolsRaw, traceID, toolPolicy, thinkingEnabled)
 	if !toolPolicy.IsNone() {
-		toolNames = ensureToolDetectionEnabled(toolNames, req["tools"])
+		toolNames = ensureToolDetectionEnabled(toolNames, toolsRaw)
 		toolPolicy.Allowed = namesToSet(toolNames)
 	}
 	passThrough := collectOpenAIChatPassThrough(req)
@@ -116,7 +133,7 @@ func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, tra
 		ResolvedModel:  resolvedModel,
 		ResponseModel:  model,
 		Messages:       messagesRaw,
-		ToolsRaw:       req["tools"],
+		ToolsRaw:       toolsRaw,
 		FinalPrompt:    finalPrompt,
 		ToolNames:      toolNames,
 		ToolChoice:     toolPolicy,
@@ -128,6 +145,13 @@ func NormalizeOpenAIResponsesRequest(store ConfigReader, req map[string]any, tra
 	}
 	out.RefreshEstimatedPromptTokens()
 	return out, nil
+}
+
+func compatToolProcessingEnabled(store ConfigReader) bool {
+	if store == nil {
+		return true
+	}
+	return store.CompatToolProcessingEnabled()
 }
 
 func ensureToolDetectionEnabled(toolNames []string, toolsRaw any) []string {

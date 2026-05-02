@@ -433,6 +433,8 @@
         "compatibilityTitle": "Compatibility",
         "compatibilityDesc": "Compatibility controls that keep stream output closer to the wire format or safer for the web UI.",
         "stripReferenceMarkers": "Strip [reference:N] markers",
+        "toolProcessingEnabled": "Enable tool-call compatibility handling",
+        "toolProcessingEnabledHelp": "Disable to skip tool prompt injection and tool-call parsing, forwarding responses as normal text.",
         "streamToolBuffer": "Stream tool-call buffer",
         "streamToolBufferHelp": "Disable for faster text passthrough; keep enabled if OpenAI tools are used.",
         "modelTitle": "Model mapping",

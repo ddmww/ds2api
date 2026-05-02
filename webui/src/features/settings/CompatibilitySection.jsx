@@ -31,6 +31,30 @@ export default function CompatibilitySection({ t, form, setForm }) {
             </div>
             <div className="flex items-center justify-between gap-4">
                 <div>
+                    <label className="text-sm font-medium">{t('settings.toolProcessingEnabled')}</label>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('settings.toolProcessingEnabledHelp')}</p>
+                </div>
+                <button
+                    type="button"
+                    role="switch"
+                    aria-checked={form.compat?.tool_processing_enabled ?? true}
+                    onClick={() => setForm((prev) => ({
+                        ...prev,
+                        compat: { ...prev.compat, tool_processing_enabled: !Boolean(prev.compat?.tool_processing_enabled ?? true) },
+                    }))}
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                        form.compat?.tool_processing_enabled ?? true ? 'bg-primary' : 'bg-muted'
+                    }`}
+                >
+                    <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            form.compat?.tool_processing_enabled ?? true ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                    />
+                </button>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+                <div>
                     <label className="text-sm font-medium">{t('settings.streamToolBuffer')}</label>
                     <p className="mt-1 text-xs text-muted-foreground">{t('settings.streamToolBufferHelp')}</p>
                 </div>

@@ -111,6 +111,7 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 		"search_enabled":   stdReq.Search,
 		"compat": map[string]any{
 			"strip_reference_markers": h.compatStripReferenceMarkers(),
+			"tool_processing_enabled": h.compatToolProcessingEnabled(),
 			"stream_tool_buffer":      h.compatStreamToolBuffer(),
 		},
 		"tool_names":     stdReq.ToolNames,

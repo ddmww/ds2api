@@ -10,6 +10,7 @@ import (
 type mockOpenAIConfig struct {
 	aliases             map[string]string
 	wideInput           bool
+	toolProcessing      *bool
 	autoDeleteMode      string
 	toolMode            string
 	earlyEmit           string
@@ -29,8 +30,14 @@ func (m mockOpenAIConfig) ModelAliases() map[string]string { return m.aliases }
 func (m mockOpenAIConfig) CompatWideInputStrictOutput() bool {
 	return m.wideInput
 }
-func (m mockOpenAIConfig) CompatStripReferenceMarkers() bool   { return true }
-func (m mockOpenAIConfig) CompatStreamToolBuffer() bool        { return true }
+func (m mockOpenAIConfig) CompatStripReferenceMarkers() bool { return true }
+func (m mockOpenAIConfig) CompatStreamToolBuffer() bool      { return true }
+func (m mockOpenAIConfig) CompatToolProcessingEnabled() bool {
+	if m.toolProcessing == nil {
+		return true
+	}
+	return *m.toolProcessing
+}
 func (m mockOpenAIConfig) ToolcallMode() string                { return m.toolMode }
 func (m mockOpenAIConfig) ToolcallEarlyEmitConfidence() string { return m.earlyEmit }
 func (m mockOpenAIConfig) ResponsesStoreTTLSeconds() int       { return m.responsesTTL }
@@ -112,6 +119,37 @@ func TestNormalizeOpenAIChatRequestDisablesThinkingForNoThinkingModel(t *testing
 	}
 	if out.Search {
 		t.Fatalf("expected search=false for deepseek-v4-pro-nothinking, got=%v", out.Search)
+	}
+}
+
+func TestNormalizeOpenAIChatRequestDisablesToolProcessing(t *testing.T) {
+	disabled := false
+	cfg := mockOpenAIConfig{wideInput: true, toolProcessing: &disabled}
+	req := map[string]any{
+		"model": "deepseek-v4-flash",
+		"messages": []any{
+			map[string]any{"role": "user", "content": "hello"},
+		},
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        "lookup",
+					"description": "lookup data",
+				},
+			},
+		},
+		"tool_choice": "required",
+	}
+	out, err := promptcompat.NormalizeOpenAIChatRequest(cfg, req, "")
+	if err != nil {
+		t.Fatalf("promptcompat.NormalizeOpenAIChatRequest error: %v", err)
+	}
+	if out.ToolsRaw != nil || len(out.ToolNames) != 0 {
+		t.Fatalf("expected tools to be ignored, tools=%v names=%v", out.ToolsRaw, out.ToolNames)
+	}
+	if out.ToolChoice.Mode != promptcompat.ToolChoiceNone {
+		t.Fatalf("expected tool choice none, got=%q", out.ToolChoice.Mode)
 	}
 }
 

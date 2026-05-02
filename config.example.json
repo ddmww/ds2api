@@ -46,6 +46,7 @@
   "compat": {
     "wide_input_strict_output": true,
     "strip_reference_markers": true,
+    "tool_processing_enabled": true,
     "stream_tool_buffer": true
   },
   "responses": {

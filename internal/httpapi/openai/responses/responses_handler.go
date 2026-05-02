@@ -183,8 +183,9 @@ func (h *Handler) handleResponsesStreamWithPromptTokens(w http.ResponseWriter, r
 	if thinkingEnabled {
 		initialType = "thinking"
 	}
-	bufferToolContent := len(toolNames) > 0 && h.compatStreamToolBuffer()
-	emitEarlyToolDeltas := h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence()
+	toolProcessingEnabled := h.compatToolProcessingEnabled()
+	bufferToolContent := toolProcessingEnabled && len(toolNames) > 0 && h.compatStreamToolBuffer()
+	emitEarlyToolDeltas := toolProcessingEnabled && h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence()
 	stripReferenceMarkers := h.compatStripReferenceMarkers()
 
 	streamRuntime := newResponsesStreamRuntime(
