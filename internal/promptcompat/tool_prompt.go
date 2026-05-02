@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"ds2api/internal/toolcall"
 )
@@ -62,6 +63,9 @@ func buildOpenAIToolSystemPrompt(tools []any, policy ToolChoicePolicy) (string, 
 		return "", names
 	}
 	toolPrompt := "You have access to these tools:\n\n" + strings.Join(toolSchemas, "\n\n") + "\n\n" + toolcall.BuildToolCallInstructions(names)
+	if hasReadLikeTool(names) {
+		toolPrompt += "\n\nRead-tool cache guard: If a Read/read_file-style tool result says the file is unchanged, already available in history, should be referenced from previous context, or otherwise provides no file body, treat that result as missing content. Do not repeatedly call the same read request for that missing body. Request a full-content read if the tool supports it, or tell the user that the file contents need to be provided again."
+	}
 	if policy.Mode == ToolChoiceRequired {
 		toolPrompt += "\n7) For this response, you MUST call at least one tool from the allowed list."
 	}
@@ -70,4 +74,24 @@ func buildOpenAIToolSystemPrompt(tools []any, policy ToolChoicePolicy) (string, 
 		toolPrompt += "\n8) Do not call any other tool."
 	}
 	return toolPrompt, names
+}
+
+func hasReadLikeTool(names []string) bool {
+	for _, name := range names {
+		switch normalizeToolNameForGuard(name) {
+		case "read", "readfile":
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeToolNameForGuard(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(name)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

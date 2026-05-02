@@ -145,7 +145,7 @@ func (s *responsesStreamRuntime) buildCompletedResponseObject(finalThinking, fin
 		}
 	}
 
-	return openaifmt.BuildResponseObjectFromItems(
+	obj := openaifmt.BuildResponseObjectFromItems(
 		s.responseID,
 		s.model,
 		s.promptTokens,
@@ -155,4 +155,8 @@ func (s *responsesStreamRuntime) buildCompletedResponseObject(finalThinking, fin
 		output,
 		outputText,
 	)
+	if s.refFileTokens > 0 {
+		addRefFileTokensToUsage(obj, s.refFileTokens)
+	}
+	return obj
 }

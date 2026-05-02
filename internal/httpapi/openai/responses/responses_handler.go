@@ -136,12 +136,11 @@ func (h *Handler) handleResponsesNonStreamWithPromptTokens(w http.ResponseWriter
 	result := sse.CollectStream(resp, thinkingEnabled, true)
 	stripReferenceMarkers := h.compatStripReferenceMarkers()
 	sanitizedThinking := cleanVisibleOutput(result.Thinking, stripReferenceMarkers)
-	toolDetectionThinking := cleanVisibleOutput(result.ToolDetectionThinking, stripReferenceMarkers)
 	sanitizedText := cleanVisibleOutput(result.Text, stripReferenceMarkers)
 	if searchEnabled {
 		sanitizedText = replaceCitationMarkersWithLinks(sanitizedText, result.CitationLinks)
 	}
-	textParsed := detectAssistantToolCalls(sanitizedText, sanitizedThinking, toolDetectionThinking, toolNames)
+	textParsed := detectAssistantToolCalls(result.Text, sanitizedText, result.Thinking, result.ToolDetectionThinking, toolNames)
 	if err := shared.AssertUpstreamAllowed(h.Store, sanitizedThinking+"\n"+sanitizedText); err != nil {
 		shared.WriteUpstreamBlockedError(w, err)
 		return
@@ -196,6 +195,7 @@ func (h *Handler) handleResponsesStreamWithPromptTokens(w http.ResponseWriter, r
 		model,
 		promptTokens,
 		finalPrompt,
+		0,
 		thinkingEnabled,
 		searchEnabled,
 		stripReferenceMarkers,

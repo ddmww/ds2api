@@ -20,14 +20,15 @@ type responsesStreamRuntime struct {
 	rc       *http.ResponseController
 	canFlush bool
 
-	responseID   string
-	model        string
-	promptTokens int
-	finalPrompt  string
-	toolNames    []string
-	traceID      string
-	toolChoice   promptcompat.ToolChoicePolicy
-	toolsRaw     any
+	responseID    string
+	model         string
+	promptTokens  int
+	finalPrompt   string
+	refFileTokens int
+	toolNames     []string
+	traceID       string
+	toolChoice    promptcompat.ToolChoicePolicy
+	toolsRaw      any
 
 	thinkingEnabled       bool
 	searchEnabled         bool
@@ -86,6 +87,7 @@ func newResponsesStreamRuntime(
 	model string,
 	promptTokens int,
 	finalPrompt string,
+	refFileTokens int,
 	thinkingEnabled bool,
 	searchEnabled bool,
 	stripReferenceMarkers bool,
@@ -107,6 +109,7 @@ func newResponsesStreamRuntime(
 		model:                     model,
 		promptTokens:              promptTokens,
 		finalPrompt:               finalPrompt,
+		refFileTokens:             refFileTokens,
 		thinkingEnabled:           thinkingEnabled,
 		searchEnabled:             searchEnabled,
 		stripReferenceMarkers:     stripReferenceMarkers,
@@ -176,7 +179,7 @@ func (s *responsesStreamRuntime) finalize(finishReason string, deferEmptyOutput 
 	finalThinking := s.thinking.String()
 	finalToolDetectionThinking := s.toolDetectionThinking.String()
 	finalText := cleanVisibleOutput(s.text.String(), s.stripReferenceMarkers)
-	textParsed := detectAssistantToolCalls(s.rawText.String(), s.rawThinking.String(), finalToolDetectionThinking, s.toolNames)
+	textParsed := detectAssistantToolCalls(s.rawText.String(), finalText, finalThinking, finalToolDetectionThinking, s.toolNames)
 	detected := textParsed.Calls
 	s.logToolPolicyRejections(textParsed)
 
@@ -268,7 +271,7 @@ func (s *responsesStreamRuntime) onParsed(parsed sse.LineResult) streamengine.Pa
 			}
 			cleanedText := cleanVisibleOutput(rawTrimmed, s.stripReferenceMarkers)
 			if cleanedText == "" {
-				continue
+				cleanedText = rawTrimmed
 			}
 			trimmed := sse.TrimContinuationOverlap(s.thinking.String(), cleanedText)
 			if trimmed == "" {

@@ -87,7 +87,6 @@ func loadConfig() (Config, bool, error) {
 		}
 		return cfg, true, err
 	}
-
 	cfg, err := loadConfigFromFile(ConfigPath())
 	if err != nil {
 		if shouldTryLegacyContainerConfigPath() {

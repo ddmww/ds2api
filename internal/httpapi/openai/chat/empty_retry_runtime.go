@@ -16,14 +16,17 @@ import (
 )
 
 type chatNonStreamResult struct {
-	thinking              string
-	toolDetectionThinking string
-	text                  string
-	contentFilter         bool
-	detectedCalls         int
-	body                  map[string]any
-	finishReason          string
-	responseMessageID     int
+	rawThinking              string
+	rawToolDetectionThinking string
+	rawText                  string
+	thinking                 string
+	toolDetectionThinking    string
+	text                     string
+	contentFilter            bool
+	detectedCalls            int
+	body                     map[string]any
+	finishReason             string
+	responseMessageID        int
 }
 
 func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Context, a *auth.RequestAuth, resp *http.Response, payload map[string]any, pow, completionID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, historySession *chatHistorySession) {
@@ -32,6 +35,8 @@ func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Co
 	usagePrompt := finalPrompt
 	accumulatedThinking := ""
 	accumulatedToolDetectionThinking := ""
+	accumulatedRawThinking := ""
+	accumulatedRawToolDetectionThinking := ""
 	for {
 		result, ok := h.collectChatNonStreamAttempt(w, currentResp, completionID, model, promptTokens, usagePrompt, thinkingEnabled, searchEnabled, toolNames, toolsRaw)
 		if !ok {
@@ -39,9 +44,13 @@ func (h *Handler) handleNonStreamWithRetry(w http.ResponseWriter, ctx context.Co
 		}
 		accumulatedThinking += sse.TrimContinuationOverlap(accumulatedThinking, result.thinking)
 		accumulatedToolDetectionThinking += sse.TrimContinuationOverlap(accumulatedToolDetectionThinking, result.toolDetectionThinking)
+		accumulatedRawThinking += sse.TrimContinuationOverlap(accumulatedRawThinking, result.rawThinking)
+		accumulatedRawToolDetectionThinking += sse.TrimContinuationOverlap(accumulatedRawToolDetectionThinking, result.rawToolDetectionThinking)
 		result.thinking = accumulatedThinking
 		result.toolDetectionThinking = accumulatedToolDetectionThinking
-		detected := detectAssistantToolCalls(result.text, result.thinking, result.toolDetectionThinking, toolNames)
+		result.rawThinking = accumulatedRawThinking
+		result.rawToolDetectionThinking = accumulatedRawToolDetectionThinking
+		detected := detectAssistantToolCalls(result.rawText, result.text, result.rawThinking, result.rawToolDetectionThinking, toolNames)
 		result.detectedCalls = len(detected.Calls)
 		result.body = openaifmt.BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, promptTokens, usagePrompt, result.thinking, result.text, detected.Calls, toolsRaw)
 		result.finishReason = chatFinishReason(result.body)
@@ -87,17 +96,20 @@ func (h *Handler) collectChatNonStreamAttempt(w http.ResponseWriter, resp *http.
 	if searchEnabled {
 		finalText = replaceCitationMarkersWithLinks(finalText, result.CitationLinks)
 	}
-	detected := detectAssistantToolCalls(finalText, finalThinking, finalToolDetectionThinking, toolNames)
+	detected := detectAssistantToolCalls(result.Text, finalText, result.Thinking, result.ToolDetectionThinking, toolNames)
 	respBody := openaifmt.BuildChatCompletionWithToolCallsAndPromptTokens(completionID, model, promptTokens, usagePrompt, finalThinking, finalText, detected.Calls, toolsRaw)
 	return chatNonStreamResult{
-		thinking:              finalThinking,
-		toolDetectionThinking: finalToolDetectionThinking,
-		text:                  finalText,
-		contentFilter:         result.ContentFilter,
-		detectedCalls:         len(detected.Calls),
-		body:                  respBody,
-		finishReason:          chatFinishReason(respBody),
-		responseMessageID:     result.ResponseMessageID,
+		rawThinking:              result.Thinking,
+		rawToolDetectionThinking: result.ToolDetectionThinking,
+		rawText:                  result.Text,
+		thinking:                 finalThinking,
+		toolDetectionThinking:    finalToolDetectionThinking,
+		text:                     finalText,
+		contentFilter:            result.ContentFilter,
+		detectedCalls:            len(detected.Calls),
+		body:                     respBody,
+		finishReason:             chatFinishReason(respBody),
+		responseMessageID:        result.ResponseMessageID,
 	}, true
 }
 
@@ -207,7 +219,7 @@ func (h *Handler) prepareChatStreamRuntime(w http.ResponseWriter, resp *http.Res
 		initialType = "thinking"
 	}
 	streamRuntime := newChatStreamRuntime(
-		w, rc, canFlush, completionID, time.Now().Unix(), model, promptTokens, finalPrompt,
+		w, rc, canFlush, completionID, time.Now().Unix(), model, promptTokens, finalPrompt, 0,
 		thinkingEnabled, searchEnabled, h.compatStripReferenceMarkers(), toolNames, toolsRaw,
 		len(toolNames) > 0 && h.compatStreamToolBuffer(), h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence(),
 		h.Store, streamUpstreamBlockerBufferTokens(h.Store),
@@ -247,6 +259,12 @@ func (h *Handler) consumeChatStreamAttempt(r *http.Request, resp *http.Response,
 			}
 		},
 	})
+	if r.Context().Err() != nil {
+		streamRuntime.finalErrorStatus = 499
+		streamRuntime.finalErrorMessage = r.Context().Err().Error()
+		streamRuntime.finalErrorCode = string(streamengine.StopReasonContextCancelled)
+		return true, false
+	}
 	terminalWritten := streamRuntime.finalize(finalReason, allowDeferEmpty && finalReason != "content_filter")
 	if terminalWritten {
 		recordChatStreamHistory(streamRuntime, historySession)

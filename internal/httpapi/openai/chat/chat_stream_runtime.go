@@ -18,13 +18,14 @@ type chatStreamRuntime struct {
 	rc       *http.ResponseController
 	canFlush bool
 
-	completionID string
-	created      int64
-	model        string
-	promptTokens int
-	finalPrompt  string
-	toolNames    []string
-	toolsRaw     any
+	completionID  string
+	created       int64
+	model         string
+	promptTokens  int
+	finalPrompt   string
+	refFileTokens int
+	toolNames     []string
+	toolsRaw      any
 
 	thinkingEnabled       bool
 	searchEnabled         bool
@@ -70,6 +71,7 @@ func newChatStreamRuntime(
 	model string,
 	promptTokens int,
 	finalPrompt string,
+	refFileTokens int,
 	thinkingEnabled bool,
 	searchEnabled bool,
 	stripReferenceMarkers bool,
@@ -89,6 +91,7 @@ func newChatStreamRuntime(
 		model:                     model,
 		promptTokens:              promptTokens,
 		finalPrompt:               finalPrompt,
+		refFileTokens:             refFileTokens,
 		toolNames:                 toolNames,
 		toolsRaw:                  toolsRaw,
 		thinkingEnabled:           thinkingEnabled,
@@ -224,7 +227,7 @@ func (s *chatStreamRuntime) finalize(finishReason string, deferEmptyOutput bool)
 	finalText := cleanVisibleOutput(s.text.String(), s.stripReferenceMarkers)
 	s.finalThinking = finalThinking
 	s.finalText = finalText
-	detected := detectAssistantToolCalls(s.rawText.String(), s.rawThinking.String(), finalToolDetectionThinking, s.toolNames)
+	detected := detectAssistantToolCalls(s.rawText.String(), finalText, finalThinking, finalToolDetectionThinking, s.toolNames)
 	if len(detected.Calls) > 0 && !s.toolCallsDoneEmitted {
 		finishReason = "tool_calls"
 		delta := map[string]any{
@@ -366,7 +369,7 @@ func (s *chatStreamRuntime) onParsed(parsed sse.LineResult) streamengine.ParsedD
 			if s.thinkingEnabled {
 				cleanedText := cleanVisibleOutput(rawTrimmed, s.stripReferenceMarkers)
 				if cleanedText == "" {
-					continue
+					cleanedText = rawTrimmed
 				}
 				trimmed := sse.TrimContinuationOverlap(s.thinking.String(), cleanedText)
 				if trimmed == "" {

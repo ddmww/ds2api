@@ -18,13 +18,16 @@ import (
 )
 
 type responsesNonStreamResult struct {
-	thinking              string
-	toolDetectionThinking string
-	text                  string
-	contentFilter         bool
-	parsed                toolcall.ToolCallParseResult
-	body                  map[string]any
-	responseMessageID     int
+	rawThinking              string
+	rawToolDetectionThinking string
+	rawText                  string
+	thinking                 string
+	toolDetectionThinking    string
+	text                     string
+	contentFilter            bool
+	parsed                   toolcall.ToolCallParseResult
+	body                     map[string]any
+	responseMessageID        int
 }
 
 func (h *Handler) handleResponsesNonStreamWithRetry(w http.ResponseWriter, ctx context.Context, a *auth.RequestAuth, resp *http.Response, payload map[string]any, pow, owner, responseID, model string, promptTokens int, finalPrompt string, thinkingEnabled, searchEnabled bool, toolNames []string, toolsRaw any, toolChoice promptcompat.ToolChoicePolicy, traceID string) {
@@ -33,6 +36,8 @@ func (h *Handler) handleResponsesNonStreamWithRetry(w http.ResponseWriter, ctx c
 	usagePrompt := finalPrompt
 	accumulatedThinking := ""
 	accumulatedToolDetectionThinking := ""
+	accumulatedRawThinking := ""
+	accumulatedRawToolDetectionThinking := ""
 	for {
 		result, ok := h.collectResponsesNonStreamAttempt(w, currentResp, responseID, model, promptTokens, usagePrompt, thinkingEnabled, searchEnabled, toolNames, toolsRaw)
 		if !ok {
@@ -40,9 +45,13 @@ func (h *Handler) handleResponsesNonStreamWithRetry(w http.ResponseWriter, ctx c
 		}
 		accumulatedThinking += sse.TrimContinuationOverlap(accumulatedThinking, result.thinking)
 		accumulatedToolDetectionThinking += sse.TrimContinuationOverlap(accumulatedToolDetectionThinking, result.toolDetectionThinking)
+		accumulatedRawThinking += sse.TrimContinuationOverlap(accumulatedRawThinking, result.rawThinking)
+		accumulatedRawToolDetectionThinking += sse.TrimContinuationOverlap(accumulatedRawToolDetectionThinking, result.rawToolDetectionThinking)
 		result.thinking = accumulatedThinking
 		result.toolDetectionThinking = accumulatedToolDetectionThinking
-		result.parsed = detectAssistantToolCalls(result.text, result.thinking, result.toolDetectionThinking, toolNames)
+		result.rawThinking = accumulatedRawThinking
+		result.rawToolDetectionThinking = accumulatedRawToolDetectionThinking
+		result.parsed = detectAssistantToolCalls(result.rawText, result.text, result.rawThinking, result.rawToolDetectionThinking, toolNames)
 		result.body = openaifmt.BuildResponseObjectWithToolCallsAndPromptTokens(responseID, model, promptTokens, usagePrompt, result.thinking, result.text, result.parsed.Calls, toolsRaw)
 
 		if !h.shouldRetryResponsesNonStream(result, attempts) {
@@ -83,16 +92,19 @@ func (h *Handler) collectResponsesNonStreamAttempt(w http.ResponseWriter, resp *
 	if searchEnabled {
 		sanitizedText = replaceCitationMarkersWithLinks(sanitizedText, result.CitationLinks)
 	}
-	textParsed := detectAssistantToolCalls(sanitizedText, sanitizedThinking, toolDetectionThinking, toolNames)
+	textParsed := detectAssistantToolCalls(result.Text, sanitizedText, result.Thinking, result.ToolDetectionThinking, toolNames)
 	responseObj := openaifmt.BuildResponseObjectWithToolCallsAndPromptTokens(responseID, model, promptTokens, usagePrompt, sanitizedThinking, sanitizedText, textParsed.Calls, toolsRaw)
 	return responsesNonStreamResult{
-		thinking:              sanitizedThinking,
-		toolDetectionThinking: toolDetectionThinking,
-		text:                  sanitizedText,
-		contentFilter:         result.ContentFilter,
-		parsed:                textParsed,
-		body:                  responseObj,
-		responseMessageID:     result.ResponseMessageID,
+		rawThinking:              result.Thinking,
+		rawToolDetectionThinking: result.ToolDetectionThinking,
+		rawText:                  result.Text,
+		thinking:                 sanitizedThinking,
+		toolDetectionThinking:    toolDetectionThinking,
+		text:                     sanitizedText,
+		contentFilter:            result.ContentFilter,
+		parsed:                   textParsed,
+		body:                     responseObj,
+		responseMessageID:        result.ResponseMessageID,
 	}, true
 }
 
@@ -183,7 +195,7 @@ func (h *Handler) prepareResponsesStreamRuntime(w http.ResponseWriter, resp *htt
 		initialType = "thinking"
 	}
 	streamRuntime := newResponsesStreamRuntime(
-		w, rc, canFlush, responseID, model, promptTokens, finalPrompt, thinkingEnabled, searchEnabled,
+		w, rc, canFlush, responseID, model, promptTokens, finalPrompt, 0, thinkingEnabled, searchEnabled,
 		h.compatStripReferenceMarkers(), toolNames, toolsRaw, len(toolNames) > 0 && h.compatStreamToolBuffer(),
 		h.toolcallFeatureMatchEnabled() && h.toolcallEarlyEmitHighConfidence(),
 		toolChoice, traceID, func(obj map[string]any) {
@@ -214,6 +226,13 @@ func (h *Handler) consumeResponsesStreamAttempt(r *http.Request, resp *http.Resp
 			}
 		},
 	})
+	if r.Context().Err() != nil {
+		streamRuntime.failed = true
+		streamRuntime.finalErrorStatus = 499
+		streamRuntime.finalErrorMessage = r.Context().Err().Error()
+		streamRuntime.finalErrorCode = string(streamengine.StopReasonContextCancelled)
+		return true, false
+	}
 	terminalWritten := streamRuntime.finalize(finalReason, allowDeferEmpty && finalReason != "content_filter")
 	if terminalWritten {
 		return true, false

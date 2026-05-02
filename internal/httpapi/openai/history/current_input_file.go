@@ -93,5 +93,5 @@ func latestUserInputForFile(messages []any) (int, string) {
 }
 
 func currentInputFilePrompt() string {
-	return "The current request and prior conversation context have already been provided. Answer the latest user request directly."
+	return "Continue from the latest state in the attached DS2API_HISTORY.txt context. Answer the latest user request directly."
 }

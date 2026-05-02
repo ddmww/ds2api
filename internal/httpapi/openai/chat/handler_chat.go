@@ -167,12 +167,11 @@ func (h *Handler) handleNonStreamWithPromptTokens(w http.ResponseWriter, resp *h
 
 	stripReferenceMarkers := h.compatStripReferenceMarkers()
 	finalThinking := cleanVisibleOutput(result.Thinking, stripReferenceMarkers)
-	finalToolDetectionThinking := cleanVisibleOutput(result.ToolDetectionThinking, stripReferenceMarkers)
 	finalText := cleanVisibleOutput(result.Text, stripReferenceMarkers)
 	if searchEnabled {
 		finalText = replaceCitationMarkersWithLinks(finalText, result.CitationLinks)
 	}
-	detected := detectAssistantToolCalls(finalText, finalThinking, finalToolDetectionThinking, toolNames)
+	detected := detectAssistantToolCalls(result.Text, finalText, result.Thinking, result.ToolDetectionThinking, toolNames)
 	if err := shared.AssertUpstreamAllowed(h.Store, finalThinking+"\n"+finalText); err != nil {
 		if historySession != nil {
 			historySession.error(http.StatusForbidden, err.Error(), "upstream_blocked", finalThinking, finalText)
@@ -244,6 +243,7 @@ func (h *Handler) handleStreamWithPromptTokens(w http.ResponseWriter, r *http.Re
 		model,
 		promptTokens,
 		finalPrompt,
+		0,
 		thinkingEnabled,
 		searchEnabled,
 		stripReferenceMarkers,
